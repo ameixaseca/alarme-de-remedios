@@ -145,7 +145,7 @@ export default function MedicationDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">Estoque atual</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Estoque atual ({med.doseUnit})</label>
                 <input
                   type="number" step="0.01"
                   className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"

@@ -20,6 +20,8 @@ const METHOD_LABELS: Record<string, string> = {
   ophthalmic: "Oftálmico", otic: "Ótico", inhalation: "Inalação", other: "Outro",
 };
 
+const DOSE_UNIT_PRESETS = ["comprimido", "cápsula", "ml", "mg", "mcg", "g", "gotas", "UI"];
+
 export default function MedicationsPage() {
   const [medications, setMedications] = useState<Medication[]>([]);
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
@@ -27,7 +29,7 @@ export default function MedicationsPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     group_id: "", name: "", manufacturer: "", active_ingredient: "",
-    application_method: "oral", dose_unit: "", stock_quantity: "",
+    application_method: "oral", dose_unit: "", dose_unit_custom: false, stock_quantity: "",
   });
   const [error, setError] = useState("");
 
@@ -63,7 +65,7 @@ export default function MedicationsPage() {
         stock_quantity: form.stock_quantity ? parseFloat(form.stock_quantity) : undefined,
       });
       setShowForm(false);
-      setForm((f) => ({ ...f, name: "", manufacturer: "", active_ingredient: "", dose_unit: "", stock_quantity: "" }));
+      setForm((f) => ({ ...f, name: "", manufacturer: "", active_ingredient: "", dose_unit: "", dose_unit_custom: false, stock_quantity: "" }));
       fetchAll();
     } catch (err: any) {
       setError(err.message);
@@ -149,12 +151,29 @@ export default function MedicationsPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">Unidade de dose *</label>
-                <input
-                  required placeholder="mg, ml, comp…"
+                <select
                   className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  value={form.dose_unit}
-                  onChange={(e) => setForm({ ...form, dose_unit: e.target.value })}
-                />
+                  value={form.dose_unit_custom ? "__other__" : form.dose_unit}
+                  onChange={(e) => {
+                    if (e.target.value === "__other__") {
+                      setForm({ ...form, dose_unit: "", dose_unit_custom: true });
+                    } else {
+                      setForm({ ...form, dose_unit: e.target.value, dose_unit_custom: false });
+                    }
+                  }}
+                >
+                  <option value="">— selecione —</option>
+                  {DOSE_UNIT_PRESETS.map((u) => <option key={u} value={u}>{u}</option>)}
+                  <option value="__other__">outro…</option>
+                </select>
+                {form.dose_unit_custom && (
+                  <input
+                    required autoFocus placeholder="unidade personalizada"
+                    className="mt-1.5 w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={form.dose_unit}
+                    onChange={(e) => setForm({ ...form, dose_unit: e.target.value })}
+                  />
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">Estoque inicial</label>

@@ -28,6 +28,11 @@ const FRACTION_OPTIONS = [
   { label: "Personalizado", value: "custom", quantity: null, fraction: null },
 ];
 
+const TABLET_UNITS = new Set(["comprimido", "cápsula", "drágea", "pastilha"]);
+function isTabletUnit(unit: string) {
+  return TABLET_UNITS.has(unit.toLowerCase().trim());
+}
+
 const FREQUENCY_PRESETS = [
   { label: "1×/dia (24h)", hours: 24 },
   { label: "2×/dia (12h)", hours: 12 },
@@ -209,31 +214,46 @@ export default function NewPrescriptionPage() {
           {/* Dose */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Dose por aplicação *</label>
-            <div className="flex gap-2">
-              <select
-                value={form.fractionKey}
-                onChange={(e) => setForm({ ...form, fractionKey: e.target.value, customQuantity: "" })}
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-              >
-                {FRACTION_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-              {form.fractionKey === "custom" && (
+            {selectedMedication && isTabletUnit(selectedMedication.doseUnit) ? (
+              <div className="flex gap-2">
+                <select
+                  value={form.fractionKey}
+                  onChange={(e) => setForm({ ...form, fractionKey: e.target.value, customQuantity: "" })}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                >
+                  {FRACTION_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                {form.fractionKey === "custom" && (
+                  <input
+                    type="number" step="0.01" min="0.01" required
+                    placeholder="0.00"
+                    value={form.customQuantity}
+                    onChange={(e) => setForm({ ...form, customQuantity: e.target.value })}
+                    className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  />
+                )}
+                <span className="flex items-center text-sm text-gray-500 font-medium whitespace-nowrap">
+                  {selectedMedication.doseUnit}
+                </span>
+              </div>
+            ) : (
+              <div className="flex gap-2 items-center">
                 <input
                   type="number" step="0.01" min="0.01" required
                   placeholder="0.00"
                   value={form.customQuantity}
-                  onChange={(e) => setForm({ ...form, customQuantity: e.target.value })}
-                  className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  onChange={(e) => setForm({ ...form, customQuantity: e.target.value, fractionKey: "custom" })}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
                 />
-              )}
-              {selectedMedication && (
-                <span className="flex items-center text-sm text-gray-500 font-medium whitespace-nowrap">
-                  {selectedMedication.doseUnit}
-                </span>
-              )}
-            </div>
+                {selectedMedication && (
+                  <span className="text-sm text-gray-500 font-medium whitespace-nowrap">
+                    {selectedMedication.doseUnit}
+                  </span>
+                )}
+              </div>
+            )}
             {doseQuantity && selectedMedication && (
               <p className="text-xs text-indigo-600 mt-1">
                 = {doseQuantity % 1 === 0 ? doseQuantity : doseQuantity.toFixed(4).replace(/\.?0+$/, "")} {selectedMedication.doseUnit} por aplicação

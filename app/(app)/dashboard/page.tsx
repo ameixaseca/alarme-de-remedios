@@ -52,7 +52,7 @@ export default function DashboardPage() {
               </div>
               <div className="space-y-0.5 text-xs text-gray-600">
                 <p>Estoque: <span className="font-medium">{med.stock_quantity ?? "—"} {med.stock_unit}</span></p>
-                <p>Consumo: <span className="font-medium">{med.daily_consumption}/{med.stock_unit}/dia</span>
+                <p>Consumo: <span className="font-medium">{med.daily_consumption} {med.stock_unit}/dia</span>
                   {" "}({med.active_prescriptions_count} paciente{med.active_prescriptions_count !== 1 ? "s" : ""})
                 </p>
                 {med.days_remaining !== null && (
@@ -100,7 +100,7 @@ export default function DashboardPage() {
                       {med.stock_quantity !== null ? `${med.stock_quantity} ${med.stock_unit}` : "—"}
                     </span></span>
                     {med.daily_consumption > 0 && (
-                      <span>Consumo: <span className="font-medium text-gray-700">{med.daily_consumption}/dia</span></span>
+                      <span>Consumo: <span className="font-medium text-gray-700">{med.daily_consumption} {med.stock_unit}/dia</span></span>
                     )}
                     {med.days_remaining !== null && (
                       <span className={med.alert ? "text-red-600 font-semibold" : ""}>
@@ -130,7 +130,7 @@ export default function DashboardPage() {
                       {med.stock_quantity !== null ? `${med.stock_quantity} ${med.stock_unit}` : "—"}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-600">
-                      {med.daily_consumption > 0 ? `${med.daily_consumption}` : "—"}
+                      {med.daily_consumption > 0 ? `${med.daily_consumption} ${med.stock_unit}` : "—"}
                     </td>
                     <td className={`px-4 py-3 text-right font-semibold ${med.alert ? "text-red-600" : "text-gray-700"}`}>
                       {med.days_remaining !== null ? `${Math.ceil(med.days_remaining)}d` : "—"}
