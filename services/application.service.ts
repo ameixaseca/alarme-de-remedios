@@ -3,11 +3,19 @@ import { prisma } from "@/lib/prisma";
 async function assertApplicationAccess(applicationId: string, userId: string) {
   const app = await prisma.application.findUnique({
     where: { id: applicationId },
-    include: { prescription: { include: { patient: true } } },
+    include: {
+      prescription: { include: { patient: true } },
+      patient: true,
+    },
   });
   if (!app) throw new Error("Application not found");
+
+  // Resolve groupId from prescription (scheduled) or direct patient (ad-hoc)
+  const groupId = app.prescription?.patient.groupId ?? app.patient?.groupId;
+  if (!groupId) throw new Error("Application not found");
+
   const member = await prisma.groupMember.findUnique({
-    where: { userId_groupId: { userId, groupId: app.prescription.patient.groupId } },
+    where: { userId_groupId: { userId, groupId } },
   });
   if (!member) throw new Error("Access denied");
   return app;
@@ -30,15 +38,17 @@ export async function listApplications(userId: string, prescriptionId?: string, 
 
   return prisma.application.findMany({
     where: {
-      prescription: { patient: { groupId: { in: groupIds } } },
+      OR: [
+        { prescription: { patient: { groupId: { in: groupIds } } } },
+        { patient: { groupId: { in: groupIds } } },
+      ],
       ...(prescriptionId && { prescriptionId }),
       ...dateFilter,
     },
     include: {
-      prescription: {
-        select: { id: true, doseUnit: true },
-      },
-      applier: { select: { id: true, name: true } },
+      prescription: { select: { id: true, doseUnit: true } },
+      medication:   { select: { id: true, name: true, doseUnit: true } },
+      applier:      { select: { id: true, name: true } },
     },
     orderBy: { appliedAt: "desc" },
   });
@@ -63,14 +73,38 @@ export async function listApplicationLog(
 
   const dateFilter: Record<string, unknown> = {};
   if (opts.from) dateFilter.gte = new Date(opts.from);
-  if (opts.to) dateFilter.lte = new Date(opts.to);
+  if (opts.to)   dateFilter.lte = new Date(opts.to);
+
+  // Match both scheduled (via prescription) and ad-hoc (direct patient/medication fields)
+  const groupFilter = {
+    OR: [
+      { prescription: { patient: { groupId: { in: groupIds } } } },
+      { patient:      { groupId: { in: groupIds } } },
+    ],
+  };
+
+  const patientFilter = opts.patientId
+    ? {
+        OR: [
+          { prescription: { patientId: opts.patientId } },
+          { patientId: opts.patientId },
+        ],
+      }
+    : {};
+
+  const medicationFilter = opts.medicationId
+    ? {
+        OR: [
+          { prescription: { medicationId: opts.medicationId } },
+          { medicationId: opts.medicationId },
+        ],
+      }
+    : {};
 
   const where = {
-    prescription: {
-      patient: { groupId: { in: groupIds } },
-      ...(opts.patientId && { patientId: opts.patientId }),
-      ...(opts.medicationId && { medicationId: opts.medicationId }),
-    },
+    ...groupFilter,
+    ...patientFilter,
+    ...medicationFilter,
     ...(Object.keys(dateFilter).length > 0 && { appliedAt: dateFilter }),
   };
 
@@ -80,12 +114,16 @@ export async function listApplicationLog(
       where,
       include: {
         applier: { select: { id: true, name: true, email: true } },
+        // For scheduled applications
         prescription: {
           include: {
-            patient: { select: { id: true, name: true, species: true } },
+            patient:    { select: { id: true, name: true, species: true } },
             medication: { select: { id: true, name: true, doseUnit: true } },
           },
         },
+        // For ad-hoc applications
+        patient:    { select: { id: true, name: true, species: true } },
+        medication: { select: { id: true, name: true, doseUnit: true } },
       },
       orderBy: { appliedAt: "desc" },
       take: opts.take ?? 50,
@@ -95,18 +133,23 @@ export async function listApplicationLog(
 
   return {
     total,
-    items: items.map((a) => ({
-      id: a.id,
-      appliedAt: a.appliedAt,
-      scheduledAt: a.scheduledAt,
-      doseApplied: a.doseApplied,
-      doseUnit: a.prescription.medication.doseUnit,
-      notes: a.notes,
-      applier: a.applier,
-      patient: a.prescription.patient,
-      medication: a.prescription.medication,
-      prescriptionId: a.prescriptionId,
-    })),
+    items: items.map((a) => {
+      const patient    = a.prescription?.patient    ?? a.patient;
+      const medication = a.prescription?.medication ?? a.medication;
+      return {
+        id:             a.id,
+        appliedAt:      a.appliedAt,
+        scheduledAt:    a.scheduledAt,
+        doseApplied:    a.doseApplied,
+        doseUnit:       medication?.doseUnit ?? "",
+        notes:          a.notes,
+        isAdHoc:        a.isAdHoc,
+        applier:        a.applier,
+        patient,
+        medication,
+        prescriptionId: a.prescriptionId,
+      };
+    }),
   };
 }
 
@@ -135,11 +178,11 @@ export async function createApplication(
   const application = await prisma.application.create({
     data: {
       prescriptionId: data.prescriptionId,
-      appliedBy: userId,
-      appliedAt: new Date(data.appliedAt),
-      scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : undefined,
-      doseApplied: data.doseApplied,
-      notes: data.notes,
+      appliedBy:      userId,
+      appliedAt:      new Date(data.appliedAt),
+      scheduledAt:    data.scheduledAt ? new Date(data.scheduledAt) : undefined,
+      doseApplied:    data.doseApplied,
+      notes:          data.notes,
     },
   });
 
@@ -151,7 +194,60 @@ export async function createApplication(
     const stockDecrement = isDrops ? data.doseApplied * 0.05 : data.doseApplied;
     const updated = await prisma.medication.update({
       where: { id: prescription.medicationId },
-      data: { stockQuantity: { decrement: stockDecrement } },
+      data:  { stockQuantity: { decrement: stockDecrement } },
+    });
+    stockRemaining = updated.stockQuantity;
+  }
+
+  return { application, stockRemaining };
+}
+
+export async function createAdHocApplication(
+  userId: string,
+  data: {
+    patientId:    string;
+    medicationId: string;
+    doseApplied:  number;
+    notes?:       string;
+  }
+) {
+  const patient = await prisma.patient.findUnique({
+    where: { id: data.patientId },
+  });
+  if (!patient)           throw new Error("Patient not found");
+  if (patient.isArchived) throw new Error("Patient is archived");
+
+  const member = await prisma.groupMember.findUnique({
+    where: { userId_groupId: { userId, groupId: patient.groupId } },
+  });
+  if (!member) throw new Error("Access denied");
+
+  const medication = await prisma.medication.findUnique({
+    where: { id: data.medicationId },
+  });
+  if (!medication)                         throw new Error("Medication not found");
+  if (medication.groupId !== patient.groupId) throw new Error("Medication does not belong to the patient's group");
+
+  const application = await prisma.application.create({
+    data: {
+      isAdHoc:     true,
+      patientId:   data.patientId,
+      medicationId: data.medicationId,
+      appliedBy:   userId,
+      appliedAt:   new Date(),
+      doseApplied: data.doseApplied,
+      notes:       data.notes,
+    },
+  });
+
+  // Deduct from stock — same rules as scheduled applications
+  let stockRemaining: number | null = null;
+  if (medication.stockQuantity !== null) {
+    const isDrops = medication.doseUnit.toLowerCase().trim() === "gotas";
+    const stockDecrement = isDrops ? data.doseApplied * 0.05 : data.doseApplied;
+    const updated = await prisma.medication.update({
+      where: { id: data.medicationId },
+      data:  { stockQuantity: { decrement: stockDecrement } },
     });
     stockRemaining = updated.stockQuantity;
   }

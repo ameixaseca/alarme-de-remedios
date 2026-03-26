@@ -139,6 +139,181 @@ function ApplyModal({
   );
 }
 
+/* ─── Ad-hoc modal ──────────────────────────────────────── */
+interface PatientOption    { id: string; name: string; species: string; groupId: string; }
+interface MedicationOption { id: string; name: string; doseUnit: string; }
+
+function AdHocModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [step, setStep] = useState<"patient" | "dose">("patient");
+
+  // Step 1
+  const [patients, setPatients]               = useState<PatientOption[]>([]);
+  const [loadingPatients, setLoadingPatients] = useState(true);
+  const [selectedPatient, setSelectedPatient] = useState<PatientOption | null>(null);
+
+  // Step 2
+  const [medications, setMedications]   = useState<MedicationOption[]>([]);
+  const [loadingMeds, setLoadingMeds]   = useState(false);
+  const [selectedMedId, setSelectedMedId] = useState("");
+  const [dose, setDose]                 = useState("");
+  const [notes, setNotes]               = useState("");
+  const [loading, setLoading]           = useState(false);
+  const [error, setError]               = useState("");
+
+  useEffect(() => {
+    api.get<{ patients: PatientOption[] }>("/patients")
+      .then((d) => setPatients(d.patients))
+      .catch(() => {})
+      .finally(() => setLoadingPatients(false));
+  }, []);
+
+  useEffect(() => {
+    if (!selectedPatient) return;
+    setLoadingMeds(true);
+    setMedications([]);
+    setSelectedMedId("");
+    setDose("");
+    api.get<{ medications: MedicationOption[] }>(`/medications?group_id=${selectedPatient.groupId}`)
+      .then((d) => {
+        setMedications(d.medications);
+        if (d.medications.length > 0) setSelectedMedId(d.medications[0].id);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingMeds(false));
+  }, [selectedPatient]);
+
+  const selectedMed = medications.find((m) => m.id === selectedMedId) ?? null;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedPatient || !selectedMedId) return;
+    setLoading(true);
+    setError("");
+    try {
+      await api.post("/applications/adhoc", {
+        patient_id:    selectedPatient.id,
+        medication_id: selectedMedId,
+        dose_applied:  parseFloat(dose),
+        notes:         notes || undefined,
+      });
+      onDone();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 px-4 pb-4 sm:pb-0">
+      <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl">
+        {/* Header */}
+        <div className="px-5 pt-5 pb-4 border-b border-gray-100 flex items-start justify-between">
+          <div>
+            <h2 className="font-semibold text-gray-900">Aplicação Avulsa</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {step === "patient" ? "Selecione o paciente" : `Paciente: ${selectedPatient?.name}`}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+        </div>
+
+        {/* Step 1 — Patient */}
+        {step === "patient" && (
+          <div className="px-5 py-4">
+            {loadingPatients ? (
+              <p className="text-sm text-gray-400 py-4 text-center">Carregando pacientes…</p>
+            ) : patients.length === 0 ? (
+              <p className="text-sm text-gray-400 py-4 text-center">Nenhum paciente cadastrado.</p>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {patients.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => { setSelectedPatient(p); setStep("dose"); }}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-left"
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${p.species === "Humano" ? "bg-blue-100" : "bg-amber-100"}`}>
+                      {p.species === "Humano"
+                        ? <IconPerson className="w-4 h-4 text-blue-600" />
+                        : <IconPaw className="w-4 h-4 text-amber-600" />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{p.name}</p>
+                      <p className="text-xs text-gray-400">{p.species}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            <button onClick={onClose}
+              className="mt-4 w-full border border-gray-300 rounded-lg py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+              Cancelar
+            </button>
+          </div>
+        )}
+
+        {/* Step 2 — Medication + dose */}
+        {step === "dose" && (
+          <form onSubmit={handleSubmit} className="px-5 py-4 space-y-4">
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2.5">{error}</div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Medicamento</label>
+              {loadingMeds ? (
+                <p className="text-sm text-gray-400">Carregando…</p>
+              ) : medications.length === 0 ? (
+                <p className="text-sm text-red-500">Nenhum medicamento cadastrado para este paciente.</p>
+              ) : (
+                <select
+                  value={selectedMedId}
+                  onChange={(e) => { setSelectedMedId(e.target.value); setDose(""); }}
+                  className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {medications.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Dose aplicada{selectedMed && <span className="text-gray-400 font-normal"> ({selectedMed.doseUnit})</span>}
+              </label>
+              <input
+                type="number" step="0.01" min="0.01" required
+                className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={dose}
+                onChange={(e) => setDose(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Observações <span className="text-gray-400 font-normal">(opcional)</span>
+              </label>
+              <textarea
+                className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                rows={2} value={notes} onChange={(e) => setNotes(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2.5 pt-1">
+              <button type="button" onClick={() => setStep("patient")}
+                className="flex-1 border border-gray-300 rounded-lg py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                Voltar
+              </button>
+              <button type="submit" disabled={loading || !selectedMedId || medications.length === 0}
+                className="flex-1 bg-indigo-600 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                {loading ? "Salvando…" : "Confirmar"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Pending card ──────────────────────────────────────── */
 function PendingCard({ item, onApply }: { item: PendingItem; onApply: () => void }) {
   const isOverdue = item.status === "overdue";
@@ -225,6 +400,7 @@ export default function HomePage() {
   const [data, setData] = useState<{ date: string; items: PendingItem[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [applyItem, setApplyItem] = useState<PendingItem | null>(null);
+  const [adHocOpen, setAdHocOpen] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const [queuedToast, setQueuedToast] = useState(0); // count of newly queued items this session
 
@@ -308,9 +484,17 @@ export default function HomePage() {
             </p>
           )}
         </div>
-        <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1.5 rounded-full shrink-0">
-          atualiza em {countdown}s
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setAdHocOpen(true)}
+            className="text-xs font-medium text-indigo-600 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-full transition-colors"
+          >
+            + Avulso
+          </button>
+          <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1.5 rounded-full">
+            atualiza em {countdown}s
+          </span>
+        </div>
       </div>
 
       {/* Summary chips — only when there's data */}
@@ -438,6 +622,13 @@ export default function HomePage() {
               fetchData();
             }
           }}
+        />
+      )}
+
+      {adHocOpen && (
+        <AdHocModal
+          onClose={() => setAdHocOpen(false)}
+          onDone={() => { setAdHocOpen(false); fetchData(); }}
         />
       )}
 

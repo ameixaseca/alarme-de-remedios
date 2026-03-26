@@ -12,9 +12,10 @@ interface LogEntry {
   doseApplied: number;
   doseUnit: string;
   notes: string | null;
+  isAdHoc: boolean;
   applier: { id: string; name: string; email: string };
-  patient: { id: string; name: string; species: string };
-  medication: { id: string; name: string; doseUnit: string };
+  patient: { id: string; name: string; species: string } | null;
+  medication: { id: string; name: string; doseUnit: string } | null;
 }
 
 /* ─── Prescription log ──────────────────────────────────── */
@@ -180,16 +181,19 @@ function ApplicationLog() {
             <div className="divide-y divide-gray-100 sm:hidden">
               {items.map((entry) => {
                 const diff = entry.scheduledAt ? new Date(entry.appliedAt).getTime() - new Date(entry.scheduledAt).getTime() : null;
-                const d = delay(diff);
+                const d = !entry.isAdHoc ? delay(diff) : null;
                 return (
                   <div key={entry.id} className="p-4">
                     <div className="flex items-start justify-between gap-3 mb-1.5">
                       <div className="min-w-0">
-                        <span className="font-semibold text-gray-900 text-sm">{entry.patient.name}</span>
+                        <span className="font-semibold text-gray-900 text-sm">{entry.patient?.name ?? "—"}</span>
                         <span className="text-gray-400 mx-1.5 text-xs">·</span>
-                        <span className="text-sm text-gray-700">{entry.medication.name}</span>
+                        <span className="text-sm text-gray-700">{entry.medication?.name ?? "—"}</span>
                       </div>
-                      {d && <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${d.color}`}>{d.label}</span>}
+                      {entry.isAdHoc
+                        ? <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Avulso</span>
+                        : d && <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${d.color}`}>{d.label}</span>
+                      }
                     </div>
                     <div className="text-xs text-gray-500 space-y-0.5">
                       <p>Dose: <span className="font-medium text-gray-700">{entry.doseApplied} {entry.doseUnit}</span></p>
@@ -214,15 +218,22 @@ function ApplicationLog() {
                 <tbody className="divide-y divide-gray-100">
                   {items.map((entry) => {
                     const diff = entry.scheduledAt ? new Date(entry.appliedAt).getTime() - new Date(entry.scheduledAt).getTime() : null;
-                    const d = delay(diff);
+                    const d = !entry.isAdHoc ? delay(diff) : null;
                     return (
                       <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3"><span className="font-medium text-gray-900">{entry.patient.name}</span><span className="block text-xs text-gray-400">{entry.patient.species}</span></td>
-                        <td className="px-4 py-3 text-gray-700">{entry.medication.name}</td>
+                        <td className="px-4 py-3"><span className="font-medium text-gray-900">{entry.patient?.name ?? "—"}</span><span className="block text-xs text-gray-400">{entry.patient?.species}</span></td>
+                        <td className="px-4 py-3 text-gray-700">{entry.medication?.name ?? "—"}</td>
                         <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{entry.doseApplied} {entry.doseUnit}</td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fmt(entry.appliedAt)}</td>
                         <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{fmt(entry.scheduledAt)}</td>
-                        <td className="px-4 py-3 whitespace-nowrap">{d ? <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${d.color}`}>{d.label}</span> : <span className="text-gray-300">—</span>}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {entry.isAdHoc
+                            ? <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Avulso</span>
+                            : d
+                              ? <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${d.color}`}>{d.label}</span>
+                              : <span className="text-gray-300">—</span>
+                          }
+                        </td>
                         <td className="px-4 py-3"><span className="text-gray-800">{entry.applier.name}</span><span className="block text-xs text-gray-400">{entry.applier.email}</span></td>
                         <td className="px-4 py-3 text-gray-400 max-w-[160px] truncate">{entry.notes ?? "—"}</td>
                       </tr>

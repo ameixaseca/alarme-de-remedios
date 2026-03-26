@@ -90,8 +90,9 @@ model Patient {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
-  group         Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  prescriptions Prescription[]
+  group            Group         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  prescriptions    Prescription[]
+  adHocApplications Application[]
 }
 
 model Medication {
@@ -106,8 +107,9 @@ model Medication {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  group         Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  prescriptions Prescription[]
+  group             Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  prescriptions     Prescription[]
+  adHocApplications Application[]
 }
 
 model Prescription {
@@ -149,15 +151,20 @@ model PrescriptionLog {
 }
 
 model Application {
-  id             String   @id @default(uuid())
-  prescriptionId String
+  id             String    @id @default(uuid())
+  prescriptionId String?
+  medicationId   String?
+  patientId      String?
+  isAdHoc        Boolean   @default(false)
   appliedBy      String
   appliedAt      DateTime
   scheduledAt    DateTime?
   doseApplied    Float
   notes          String?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
-  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
-  applier      User         @relation(fields: [appliedBy], references: [id])
+  prescription Prescription? @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  medication   Medication?   @relation(fields: [medicationId], references: [id], onDelete: SetNull)
+  patient      Patient?      @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  applier      User          @relation(fields: [appliedBy], references: [id])
 }
