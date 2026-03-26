@@ -66,6 +66,7 @@ export async function getPendingMedications(userId: string) {
           prescription: { id: prescription.id },
           medication: prescription.medication,
           scheduled_at: scheduledAt.toISOString(),
+          scheduled_time: timeStr,          // raw "HH:MM" — use this for display
           status: isOverdue ? "overdue" : "upcoming",
           dose_quantity: prescription.doseQuantity,
           dose_fraction: prescription.doseFraction,
@@ -104,16 +105,21 @@ export async function getStockDashboard(userId: string) {
     include: {
       prescriptions: {
         where: { status: "active" },
-        select: { frequencyHours: true, doseQuantity: true },
+        select: { frequencyHours: true, doseQuantity: true, doseUnit: true },
       },
     },
   });
 
   const today = new Date();
 
+  const DROPS_TO_ML = 0.05;
+
   const result = medications.map((med) => {
+    const isDrops = med.doseUnit.toLowerCase().trim() === "gotas";
     const dailyConsumption = med.prescriptions.reduce((sum, p) => {
-      return sum + (24 / p.frequencyHours) * p.doseQuantity;
+      const dosesPerDay = 24 / p.frequencyHours;
+      const doseInStockUnit = isDrops ? p.doseQuantity * DROPS_TO_ML : p.doseQuantity;
+      return sum + dosesPerDay * doseInStockUnit;
     }, 0);
 
     const daysRemaining =
@@ -132,7 +138,7 @@ export async function getStockDashboard(userId: string) {
       id: med.id,
       name: med.name,
       stock_quantity: med.stockQuantity,
-      stock_unit: med.doseUnit,
+      stock_unit: isDrops ? "mL" : med.doseUnit,
       daily_consumption: Math.round(dailyConsumption * 100) / 100,
       days_remaining: daysRemaining !== null ? Math.round(daysRemaining * 10) / 10 : null,
       alert: daysRemaining !== null ? daysRemaining < LOW_STOCK_DAYS : false,

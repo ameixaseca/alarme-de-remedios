@@ -143,12 +143,15 @@ export async function createApplication(
     },
   });
 
-  // Subtract from stock if defined (allow negative)
+  // Subtract from stock if defined (allow negative).
+  // Gotas: stock is kept in mL (1 gota = 0.05 mL).
   let stockRemaining: number | null = null;
   if (prescription.medication.stockQuantity !== null) {
+    const isDrops = prescription.medication.doseUnit.toLowerCase().trim() === "gotas";
+    const stockDecrement = isDrops ? data.doseApplied * 0.05 : data.doseApplied;
     const updated = await prisma.medication.update({
       where: { id: prescription.medicationId },
-      data: { stockQuantity: { decrement: data.doseApplied } },
+      data: { stockQuantity: { decrement: stockDecrement } },
     });
     stockRemaining = updated.stockQuantity;
   }
