@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/client/api";
+import { IconClock, IconAlertTriangle, IconCheck, IconPill } from "@/app/components/icons";
 
 interface PendingItem {
   patient: { id: string; name: string; species: string };
@@ -48,40 +49,66 @@ function ApplyModal({ item, onClose, onSuccess }: ApplyModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
-        <h2 className="text-lg font-bold mb-1">Registrar Aplicação</h2>
-        <p className="text-sm text-gray-600 mb-4">
-          {item.patient.name} · {item.medication.name}
-        </p>
-        {error && <p className="bg-red-50 text-red-600 text-sm p-2 rounded mb-3">{error}</p>}
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 px-4 pb-4 sm:pb-0">
+      <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl">
+        {/* Header */}
+        <div className="px-5 pt-5 pb-4 border-b border-gray-100">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="font-semibold text-gray-900">Registrar Aplicação</h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {item.patient.name} · {item.medication.name}
+              </p>
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 -mt-0.5">
+              <span className="text-xl leading-none">×</span>
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
+            <IconClock className="w-3.5 h-3.5" />
+            Prevista às {new Date(item.scheduled_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+          </p>
+        </div>
+
+        {/* Body */}
+        <form onSubmit={handleSubmit} className="px-5 py-4 space-y-4">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2.5">
+              {error}
+            </div>
+          )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Dose aplicada ({item.dose_unit})
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Dose aplicada <span className="text-gray-400 font-normal">({item.dose_unit})</span>
             </label>
             <input
               type="number" step="0.01" min="0.01" required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+              className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               value={dose}
               onChange={(e) => setDose(e.target.value)}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Observações (opcional)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Observações <span className="text-gray-400 font-normal">(opcional)</span></label>
             <textarea
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
           </div>
-          <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="flex-1 border border-gray-300 rounded-lg py-2 text-sm">
+          <div className="flex gap-2.5 pt-1">
+            <button
+              type="button" onClick={onClose}
+              className="flex-1 border border-gray-300 rounded-lg py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            >
               Cancelar
             </button>
-            <button type="submit" disabled={loading} className="flex-1 bg-indigo-600 text-white rounded-lg py-2 text-sm font-semibold disabled:opacity-50">
-              {loading ? "Salvando..." : "Confirmar"}
+            <button
+              type="submit" disabled={loading}
+              className="flex-1 bg-indigo-600 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {loading ? "Salvando…" : "Confirmar"}
             </button>
           </div>
         </form>
@@ -97,29 +124,50 @@ function formatTime(iso: string) {
 function PendingCard({ item, onApply }: { item: PendingItem; onApply: () => void }) {
   const isOverdue = item.status === "overdue";
 
-  const borderColor = isOverdue ? "border-red-300" : "border-yellow-300";
-  const bgColor = isOverdue ? "bg-red-50" : "bg-yellow-50";
-  const badge = isOverdue ? "🔴 ATRASADA" : "🟡 PENDENTE";
-
   return (
-    <div className={`rounded-xl border-2 ${borderColor} ${bgColor} p-4`}>
-      <div className="flex justify-between items-start mb-2">
-        <span className="font-bold text-gray-800 uppercase">{item.patient.name}</span>
-        <span className="text-xs font-semibold">{badge}</span>
+    <div className={`bg-white rounded-xl border-2 p-4 ${isOverdue ? "border-red-200" : "border-amber-200"}`}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${isOverdue ? "bg-red-100" : "bg-amber-100"}`}>
+            {isOverdue
+              ? <IconAlertTriangle className="w-4 h-4 text-red-600" />
+              : <IconClock className="w-4 h-4 text-amber-600" />
+            }
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-gray-900 truncate">{item.patient.name}</p>
+            <p className="text-sm text-gray-600 truncate">{item.medication.name}</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {item.dose_fraction ?? item.dose_quantity} {item.dose_unit}
+            </p>
+          </div>
+        </div>
+        <span className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${
+          isOverdue ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+        }`}>
+          {isOverdue ? "Atrasada" : "Pendente"}
+        </span>
       </div>
-      <p className="text-sm text-gray-700">
-        {item.medication.name} — {item.dose_fraction ?? item.dose_quantity} {item.dose_unit}
-      </p>
-      <p className="text-xs text-gray-500 mt-1">
-        Prevista às {formatTime(item.scheduled_at)}
-        {isOverdue && item.minutes_overdue && ` · ${Math.floor(item.minutes_overdue / 60)}h ${item.minutes_overdue % 60}min atrás`}
-      </p>
-      <button
-        onClick={onApply}
-        className="mt-3 w-full bg-indigo-600 text-white text-sm font-semibold py-2 rounded-lg hover:bg-indigo-700"
-      >
-        Registrar Aplicação
-      </button>
+
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-gray-500">
+          Prevista às {formatTime(item.scheduled_at)}
+          {isOverdue && item.minutes_overdue && (
+            <span className="text-red-500 ml-1">
+              · {item.minutes_overdue >= 60
+                ? `${Math.floor(item.minutes_overdue / 60)}h ${item.minutes_overdue % 60}min atrás`
+                : `${item.minutes_overdue}min atrás`}
+            </span>
+          )}
+        </p>
+        <button
+          onClick={onApply}
+          className="flex items-center gap-1.5 bg-indigo-600 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors"
+        >
+          <IconCheck className="w-3.5 h-3.5" />
+          Registrar
+        </button>
+      </div>
     </div>
   );
 }
@@ -135,7 +183,7 @@ export default function HomePage() {
       const result = await api.get<{ date: string; items: PendingItem[] }>("/dashboard/pending");
       setData(result);
     } catch {
-      // Will redirect to login if 401
+      // redirects to login on 401
     } finally {
       setLoading(false);
       setCountdown(60);
@@ -154,24 +202,40 @@ export default function HomePage() {
   }, []);
 
   if (loading) {
-    return <div className="text-center py-16 text-gray-400">Carregando...</div>;
+    return <div className="flex items-center justify-center py-20 text-gray-400 text-sm">Carregando…</div>;
   }
 
   const today = data?.date
-    ? new Date(data.date + "T00:00:00").toLocaleDateString("pt-BR", { day: "numeric", month: "short" })
+    ? new Date(data.date + "T00:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })
     : "";
 
+  const overdueCount = data?.items.filter((i) => i.status === "overdue").length ?? 0;
+
   return (
-    <div>
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="font-bold text-gray-800">Hoje, {today}</h1>
-        <span className="text-xs text-gray-400">Atualiza em {countdown}s</span>
+    <div className="space-y-5">
+      {/* Header */}
+      <div>
+        <div className="flex items-center justify-between">
+          <h1 className="font-bold text-xl text-gray-900 capitalize">{today}</h1>
+          <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
+            atualiza em {countdown}s
+          </span>
+        </div>
+        {overdueCount > 0 && (
+          <p className="text-sm text-red-600 mt-1 font-medium">
+            {overdueCount} medicação{overdueCount > 1 ? "ões" : ""} atrasada{overdueCount > 1 ? "s" : ""}
+          </p>
+        )}
       </div>
 
+      {/* Content */}
       {!data?.items?.length ? (
-        <div className="text-center py-16 text-gray-400">
-          <p className="text-4xl mb-3">✅</p>
-          <p>Nenhuma medicação pendente hoje!</p>
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+            <IconCheck className="w-8 h-8 text-green-600" />
+          </div>
+          <p className="font-semibold text-gray-700 text-lg">Tudo em dia!</p>
+          <p className="text-sm text-gray-400 mt-1">Nenhuma medicação pendente hoje.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -186,15 +250,13 @@ export default function HomePage() {
           item={applyItem}
           onClose={() => setApplyItem(null)}
           onSuccess={() => {
-          const applied = applyItem;
-          setApplyItem(null);
-          // Optimistically remove the item while refetch runs
-          setData((prev) => prev
-            ? { ...prev, items: prev.items.filter((i) => i !== applied) }
-            : prev
-          );
-          fetchData();
-        }}
+            const applied = applyItem;
+            setApplyItem(null);
+            setData((prev) =>
+              prev ? { ...prev, items: prev.items.filter((i) => i !== applied) } : prev
+            );
+            fetchData();
+          }}
         />
       )}
     </div>

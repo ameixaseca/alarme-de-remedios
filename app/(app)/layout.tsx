@@ -2,6 +2,19 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import {
+  IconHome, IconPackage, IconUsers, IconPill,
+  IconGroup, IconClipboard, IconLogOut,
+} from "@/app/components/icons";
+
+const navItems = [
+  { href: "/",            label: "Início",     Icon: IconHome },
+  { href: "/dashboard",   label: "Estoque",    Icon: IconPackage },
+  { href: "/patients",    label: "Pacientes",  Icon: IconUsers },
+  { href: "/medications", label: "Remédios",   Icon: IconPill },
+  { href: "/group",       label: "Grupo",      Icon: IconGroup },
+  { href: "/log",         label: "Log",        Icon: IconClipboard },
+];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -12,15 +25,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (!token) router.replace("/login");
   }, [router]);
 
-  const navItems = [
-    { href: "/", label: "🏠 Início" },
-    { href: "/dashboard", label: "📦 Estoque" },
-    { href: "/patients", label: "👤 Pacientes" },
-    { href: "/medications", label: "💊 Medicamentos" },
-    { href: "/group", label: "👥 Grupo" },
-    { href: "/log", label: "📋 Log" },
-  ];
-
   function handleLogout() {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
@@ -28,56 +32,97 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="bg-indigo-600 text-white px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow">
-        <span className="font-bold text-lg">💊 DailyMed</span>
-        <button onClick={handleLogout} className="lg:hidden text-sm text-indigo-200 hover:text-white">Sair</button>
-      </header>
+    <div className="min-h-screen bg-gray-50">
+      {/* ── Desktop sidebar ─────────────────────────────────── */}
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-60 flex-col bg-white border-r border-gray-200">
+        {/* Logo */}
+        <div className="flex items-center gap-2.5 px-5 h-16 border-b border-gray-200 shrink-0">
+          <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
+            <IconPill className="w-4.5 h-4.5 text-white" />
+          </div>
+          <span className="font-bold text-gray-900 text-base tracking-tight">DailyMed</span>
+        </div>
 
-      <div className="flex flex-1">
-        {/* Sidebar — visible on desktop, left side */}
-        <aside className="hidden lg:flex flex-col w-52 shrink-0 sticky top-14 self-start h-[calc(100vh-3.5rem)] border-r border-indigo-100 bg-white/70 backdrop-blur px-3 py-5">
-          <nav className="flex flex-col gap-1 flex-1">
-            {navItems.map((item) => (
+        {/* Nav links */}
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          {navItems.map(({ href, label, Icon }) => {
+            const active = pathname === href;
+            return (
               <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  pathname === item.href
-                    ? "bg-indigo-600 text-white"
-                    : "text-gray-600 hover:bg-indigo-50 hover:text-indigo-700"
+                key={href}
+                href={href}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  active
+                    ? "bg-indigo-50 text-indigo-700"
+                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                 }`}
               >
-                {item.label}
+                <Icon className={`w-5 h-5 shrink-0 ${active ? "text-indigo-600" : "text-gray-400"}`} />
+                {label}
               </Link>
-            ))}
-          </nav>
+            );
+          })}
+        </nav>
+
+        {/* Logout */}
+        <div className="px-3 pb-5 shrink-0">
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+            className="flex items-center gap-3 px-3 py-2.5 w-full rounded-lg text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors"
           >
-            ↩ Sair
+            <IconLogOut className="w-5 h-5 shrink-0 text-gray-400" />
+            Sair da conta
           </button>
-        </aside>
+        </div>
+      </aside>
 
-        <main className="flex-1 px-4 py-6 max-w-2xl mx-auto w-full lg:max-w-none lg:mx-0 lg:pl-6">
+      {/* ── Mobile top header ───────────────────────────────── */}
+      <header className="lg:hidden fixed top-0 inset-x-0 z-40 h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 bg-indigo-600 rounded-md flex items-center justify-center">
+            <IconPill className="w-4 h-4 text-white" />
+          </div>
+          <span className="font-bold text-gray-900">DailyMed</span>
+        </div>
+        <button
+          onClick={handleLogout}
+          className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+          aria-label="Sair"
+        >
+          <IconLogOut className="w-5 h-5" />
+        </button>
+      </header>
+
+      {/* ── Main content ────────────────────────────────────── */}
+      {/*
+        Mobile:  pt-14 (header height) + pb-20 (bottom nav height)
+        Desktop: ml-60 (sidebar width), no extra padding
+      */}
+      <main className="lg:ml-60 pt-14 lg:pt-0 pb-20 lg:pb-0">
+        <div className="max-w-3xl mx-auto px-4 py-6 lg:px-8 lg:py-8 lg:max-w-4xl">
           {children}
-        </main>
-      </div>
+        </div>
+      </main>
 
-      {/* Bottom nav — mobile only */}
-      <nav className="lg:hidden bg-white/80 backdrop-blur border-t border-gray-200 flex justify-around sticky bottom-0 z-10">
-        {navItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`flex flex-col items-center py-2 px-3 text-xs ${
-              pathname === item.href ? "text-indigo-600 font-semibold" : "text-gray-500"
-            }`}
-          >
-            {item.label}
-          </Link>
-        ))}
+      {/* ── Mobile bottom navigation ────────────────────────── */}
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 pb-safe">
+        <div className="flex">
+          {navItems.map(({ href, label, Icon }) => {
+            const active = pathname === href;
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`flex-1 flex flex-col items-center gap-0.5 pt-2 pb-2.5 transition-colors ${
+                  active ? "text-indigo-600" : "text-gray-400 hover:text-gray-600"
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-[10px] font-medium leading-tight">{label}</span>
+              </Link>
+            );
+          })}
+        </div>
       </nav>
     </div>
   );

@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f9fafb;
+  --foreground: #111827;
   color-scheme: light;
 }
 
@@ -13,11 +13,16 @@
   --font-mono: var(--font-geist-mono);
 }
 
+html {
+  height: 100%;
+}
+
 body {
-  background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 50%, #f3e8ff 100%);
-  min-height: 100vh;
-  color: #171717;
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #f9fafb;
+  min-height: 100%;
+  color: #111827;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 input, textarea, select {
@@ -25,7 +30,12 @@ input, textarea, select {
   background-color: #ffffff;
 }
 
-/* Ensure readable text in cards regardless of OS color scheme */
-.bg-white, [class*="bg-white"] {
-  color: #171717;
+/* iOS safe area for fixed bottom nav */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Smooth scroll for content areas */
+.scroll-smooth {
+  scroll-behavior: smooth;
 }

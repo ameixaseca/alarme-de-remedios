@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/client/api";
+import { IconChevronLeft } from "@/app/components/icons";
 
 interface Medication {
   id: string;
@@ -164,9 +165,15 @@ export default function NewPrescriptionPage() {
   return (
     <div className="max-w-lg mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <button type="button" onClick={() => router.back()} className="text-gray-500 hover:text-gray-700 text-xl leading-none">‹</button>
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors text-gray-600 shrink-0"
+        >
+          <IconChevronLeft className="w-4 h-4" />
+        </button>
         <div>
-          <h1 className="font-bold text-xl text-gray-800">Nova Prescrição</h1>
+          <h1 className="font-bold text-xl text-gray-900">Nova Prescrição</h1>
           {patient && <p className="text-sm text-gray-500">Paciente: {patient.name}</p>}
         </div>
       </div>

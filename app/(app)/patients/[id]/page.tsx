@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/client/api";
+import { IconPaw, IconPerson, IconChevronLeft, IconPlus } from "@/app/components/icons";
 
 interface Patient {
   id: string;
@@ -32,6 +33,13 @@ function calcAge(birthDate: string) {
   return Math.floor((Date.now() - new Date(birthDate).getTime()) / (365.25 * 24 * 3600 * 1000));
 }
 
+const statusLabel: Record<string, string> = { active: "Ativa", paused: "Pausada", finished: "Encerrada" };
+const statusColor: Record<string, string> = {
+  active: "bg-green-100 text-green-700",
+  paused: "bg-amber-100 text-amber-700",
+  finished: "bg-gray-100 text-gray-500",
+};
+
 export default function PatientDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -58,13 +66,9 @@ export default function PatientDetailPage() {
       setPatient(p);
       setPrescriptions(px);
       setForm({
-        name: p.name,
-        species: p.species,
-        breed: p.breed ?? "",
-        weightKg: p.weightKg?.toString() ?? "",
-        notes: p.notes ?? "",
-        gender: p.gender ?? "",
-        birthDate: p.birthDate ? p.birthDate.slice(0, 10) : "",
+        name: p.name, species: p.species, breed: p.breed ?? "",
+        weightKg: p.weightKg?.toString() ?? "", notes: p.notes ?? "",
+        gender: p.gender ?? "", birthDate: p.birthDate ? p.birthDate.slice(0, 10) : "",
       });
     }).finally(() => setLoading(false));
   }, [id]);
@@ -75,8 +79,7 @@ export default function PatientDetailPage() {
     setError("");
     try {
       await api.patch(`/patients/${id}`, {
-        name: form.name,
-        species: form.species,
+        name: form.name, species: form.species,
         breed: isEditHuman ? undefined : (form.breed || undefined),
         weight_kg: form.weightKg ? parseFloat(form.weightKg) : undefined,
         notes: form.notes || undefined,
@@ -99,68 +102,133 @@ export default function PatientDetailPage() {
     router.replace("/patients");
   }
 
-  if (loading) return <div className="text-center py-16 text-gray-400">Carregando...</div>;
-  if (!patient) return <div className="text-center py-16 text-red-400">Paciente não encontrado.</div>;
+  if (loading) return <div className="flex justify-center py-20 text-gray-400 text-sm">Carregando…</div>;
+  if (!patient) return <div className="flex justify-center py-20 text-red-400 text-sm">Paciente não encontrado.</div>;
 
   return (
-    <div>
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} className="text-gray-500 hover:text-gray-700">‹</button>
-        <div>
-          <div className="flex items-center gap-2">
-            <span>{isHuman ? "👤" : "🐾"}</span>
-            <h1 className="font-bold text-xl text-gray-800">{patient.name}</h1>
+    <div className="space-y-5">
+      {/* Back + title */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => router.back()}
+          className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors text-gray-600"
+        >
+          <IconChevronLeft className="w-4 h-4" />
+        </button>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${isHuman ? "bg-blue-100" : "bg-amber-100"}`}>
+            {isHuman
+              ? <IconPerson className="w-5 h-5 text-blue-600" />
+              : <IconPaw className="w-5 h-5 text-amber-600" />
+            }
           </div>
-          <p className="text-xs text-gray-400 ml-6">{isHuman ? "Humano" : patient.species}</p>
+          <div className="min-w-0">
+            <h1 className="font-bold text-xl text-gray-900 leading-tight truncate">{patient.name}</h1>
+            <p className="text-xs text-gray-400">{isHuman ? "Humano" : patient.species}</p>
+          </div>
         </div>
       </div>
 
+      {/* Info card */}
       {!editing ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-          <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+          <div className="grid grid-cols-2 gap-y-3 gap-x-6 text-sm mb-5">
             {isHuman ? (
               <>
-                {patient.gender && <div><span className="text-gray-500">Gênero:</span> <span className="font-medium">{patient.gender}</span></div>}
+                {patient.gender && (
+                  <div>
+                    <span className="text-xs text-gray-400 block mb-0.5">Gênero</span>
+                    <span className="font-medium text-gray-800">{patient.gender}</span>
+                  </div>
+                )}
                 {patient.birthDate && (
                   <div>
-                    <span className="text-gray-500">Idade:</span>{" "}
-                    <span className="font-medium">{calcAge(patient.birthDate)} anos</span>
-                    <span className="text-gray-400 text-xs ml-1">({new Date(patient.birthDate).toLocaleDateString("pt-BR")})</span>
+                    <span className="text-xs text-gray-400 block mb-0.5">Idade</span>
+                    <span className="font-medium text-gray-800">{calcAge(patient.birthDate)} anos</span>
+                    <span className="text-gray-400 text-xs ml-1.5">
+                      ({new Date(patient.birthDate).toLocaleDateString("pt-BR")})
+                    </span>
                   </div>
                 )}
               </>
             ) : (
               <>
-                <div><span className="text-gray-500">Espécie:</span> <span className="font-medium">{patient.species}</span></div>
-                {patient.breed && <div><span className="text-gray-500">Raça:</span> <span className="font-medium">{patient.breed}</span></div>}
+                <div>
+                  <span className="text-xs text-gray-400 block mb-0.5">Espécie</span>
+                  <span className="font-medium text-gray-800">{patient.species}</span>
+                </div>
+                {patient.breed && (
+                  <div>
+                    <span className="text-xs text-gray-400 block mb-0.5">Raça</span>
+                    <span className="font-medium text-gray-800">{patient.breed}</span>
+                  </div>
+                )}
               </>
             )}
-            {patient.weightKg && <div><span className="text-gray-500">Peso:</span> <span className="font-medium">{patient.weightKg}kg</span></div>}
-            {patient.notes && <div className="col-span-2"><span className="text-gray-500">Obs:</span> <span className="font-medium">{patient.notes}</span></div>}
+            {patient.weightKg && (
+              <div>
+                <span className="text-xs text-gray-400 block mb-0.5">Peso</span>
+                <span className="font-medium text-gray-800">{patient.weightKg} kg</span>
+              </div>
+            )}
+            {patient.notes && (
+              <div className="col-span-2">
+                <span className="text-xs text-gray-400 block mb-0.5">Observações</span>
+                <span className="font-medium text-gray-800">{patient.notes}</span>
+              </div>
+            )}
           </div>
-          <div className="flex gap-2 mt-4">
-            <button onClick={() => setEditing(true)} className="flex-1 border border-gray-300 text-gray-600 rounded-lg py-2 text-sm">Editar</button>
-            <button onClick={handleArchive} className="flex-1 border border-red-300 text-red-600 rounded-lg py-2 text-sm">Arquivar</button>
+          <div className="flex gap-2.5 border-t border-gray-100 pt-4">
+            <button
+              onClick={() => setEditing(true)}
+              className="flex-1 border border-gray-300 text-gray-600 rounded-lg py-2 text-sm font-medium hover:bg-gray-50 transition-colors"
+            >
+              Editar
+            </button>
+            <button
+              onClick={handleArchive}
+              className="flex-1 border border-red-200 text-red-600 rounded-lg py-2 text-sm font-medium hover:bg-red-50 transition-colors"
+            >
+              Arquivar
+            </button>
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-indigo-200 p-4 mb-6">
-          {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
+        <div className="bg-white rounded-xl border border-indigo-200 shadow-sm p-5">
+          <h2 className="font-semibold text-gray-900 mb-4">Editar paciente</h2>
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3.5 py-3 mb-4">
+              {error}
+            </div>
+          )}
           <form onSubmit={handleSave} className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Nome</label>
-              <input required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Nome</label>
+              <input
+                required
+                className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
             </div>
-
             {isEditHuman ? (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Data de nascimento</label>
-                  <input type="date" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} />
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Data de nascimento</label>
+                  <input
+                    type="date"
+                    className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={form.birthDate}
+                    onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Gênero</label>
-                  <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Gênero</label>
+                  <select
+                    className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={form.gender}
+                    onChange={(e) => setForm({ ...form, gender: e.target.value })}
+                  >
                     <option value="">— selecione —</option>
                     {GENDER_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
                   </select>
@@ -169,88 +237,98 @@ export default function PatientDetailPage() {
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Espécie</label>
-                  <input required className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.species} onChange={(e) => setForm({ ...form, species: e.target.value })} />
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Espécie</label>
+                  <input
+                    required
+                    className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={form.species}
+                    onChange={(e) => setForm({ ...form, species: e.target.value })}
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Raça</label>
-                  <input className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.breed} onChange={(e) => setForm({ ...form, breed: e.target.value })} />
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Raça</label>
+                  <input
+                    className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={form.breed}
+                    onChange={(e) => setForm({ ...form, breed: e.target.value })}
+                  />
                 </div>
               </div>
             )}
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Peso (kg)</label>
-                <input type="number" step="0.1" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" value={form.weightKg} onChange={(e) => setForm({ ...form, weightKg: e.target.value })} />
-              </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Peso (kg)</label>
+              <input
+                type="number" step="0.1"
+                className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={form.weightKg}
+                onChange={(e) => setForm({ ...form, weightKg: e.target.value })}
+              />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Observações</label>
-              <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Observações</label>
+              <textarea
+                className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                rows={2}
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              />
             </div>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setEditing(false)} className="flex-1 border border-gray-300 rounded-lg py-2 text-sm text-gray-600">Cancelar</button>
-              <button type="submit" disabled={saving} className="flex-1 bg-indigo-600 text-white rounded-lg py-2 text-sm font-semibold disabled:opacity-50">{saving ? "Salvando..." : "Salvar"}</button>
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button" onClick={() => setEditing(false)}
+                className="flex-1 border border-gray-300 rounded-lg py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit" disabled={saving}
+                className="flex-1 bg-indigo-600 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              >
+                {saving ? "Salvando…" : "Salvar"}
+              </button>
             </div>
           </form>
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-gray-700">Prescrições</h2>
-        <button
-          onClick={() => router.push(`/patients/${id}/prescriptions/new`)}
-          className="text-sm bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700"
-        >
-          + Nova
-        </button>
-      </div>
-      {prescriptions.length === 0 ? (
-        <p className="text-sm text-gray-400">Nenhuma prescrição cadastrada.</p>
-      ) : (
-        <div className="space-y-2">
-          {prescriptions.map((p) => (
-            <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-3">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="font-medium text-gray-800 text-sm">{p.medication.name}</p>
-                  <p className="text-xs text-gray-500">
-                    {p.doseFraction ?? p.doseQuantity} {p.doseUnit} · a cada {p.frequencyHours}h
-                  </p>
-                  <p className="text-xs text-gray-500">Horários: {(p.scheduleTimes as string[]).join(", ")}</p>
-                </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${p.status === "active" ? "bg-green-100 text-green-700" : p.status === "paused" ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-600"}`}>
-                  {p.status === "active" ? "Ativa" : p.status === "paused" ? "Pausada" : "Encerrada"}
-                </span>
-              </div>
-            </div>
-          ))}
+      {/* Prescriptions */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-gray-900">Prescrições</h2>
+          <button
+            onClick={() => router.push(`/patients/${id}/prescriptions/new`)}
+            className="flex items-center gap-1.5 text-sm bg-indigo-600 text-white px-3.5 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+          >
+            <IconPlus className="w-3.5 h-3.5" />
+            Nova
+          </button>
         </div>
-      )}
+
+        {prescriptions.length === 0 ? (
+          <p className="text-sm text-gray-400 py-4">Nenhuma prescrição cadastrada.</p>
+        ) : (
+          <div className="space-y-2">
+            {prescriptions.map((p) => (
+              <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900 text-sm truncate">{p.medication.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {p.doseFraction ?? p.doseQuantity} {p.doseUnit} · a cada {p.frequencyHours}h
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Horários: {(p.scheduleTimes as string[]).join(", ")}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 text-xs px-2.5 py-1 rounded-full font-medium ${statusColor[p.status] ?? "bg-gray-100 text-gray-500"}`}>
+                    {statusLabel[p.status] ?? p.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
-}
-
-
-interface Patient {
-  id: string;
-  name: string;
-  species: string;
-  breed?: string;
-  birthDate?: string;
-  weightKg?: number;
-  notes?: string;
-  groupId: string;
-}
-
-interface Prescription {
-  id: string;
-  status: string;
-  doseQuantity: number;
-  doseFraction?: string;
-  doseUnit: string;
-  frequencyHours: number;
-  scheduleTimes: string[];
-  medication: { id: string; name: string };
 }

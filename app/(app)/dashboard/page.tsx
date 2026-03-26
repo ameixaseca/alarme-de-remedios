@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/client/api";
+import { IconAlertTriangle, IconPackage } from "@/app/components/icons";
 
 interface StockItem {
   id: string;
@@ -24,78 +25,122 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="text-center py-16 text-gray-400">Carregando...</div>;
+  if (loading) return <div className="flex justify-center py-20 text-gray-400 text-sm">Carregando…</div>;
 
   const alertMeds = data?.medications.filter((m) => m.alert) ?? [];
   const allMeds = data?.medications ?? [];
 
   return (
-    <div>
-      <h1 className="font-bold text-xl text-gray-800 mb-4">Dashboard de Estoque</h1>
+    <div className="space-y-6">
+      <h1 className="font-bold text-xl text-gray-900">Estoque</h1>
 
+      {/* Alert section */}
       {alertMeds.length > 0 && (
-        <div className="mb-6">
-          <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-3">
-            <h2 className="font-bold text-red-700 mb-3">⚠️ ATENÇÃO — ESTOQUE BAIXO</h2>
-            <div className="space-y-3">
-              {alertMeds.map((med) => (
-                <div key={med.id} className="bg-white rounded-lg p-3 border border-red-100">
-                  <div className="flex justify-between items-start">
-                    <p className="font-semibold text-gray-800">{med.name}</p>
-                    <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">🔴 URGENTE</span>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <IconAlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
+            <h2 className="font-semibold text-red-700">Estoque crítico</h2>
+          </div>
+          {alertMeds.map((med) => (
+            <div key={med.id} className="bg-white rounded-lg border border-red-100 p-3.5">
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <p className="font-semibold text-gray-900 text-sm">{med.name}</p>
+                <span className="shrink-0 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold">
+                  Urgente
+                </span>
+              </div>
+              <div className="space-y-0.5 text-xs text-gray-600">
+                <p>Estoque: <span className="font-medium">{med.stock_quantity ?? "—"} {med.stock_unit}</span></p>
+                <p>Consumo: <span className="font-medium">{med.daily_consumption}/{med.stock_unit}/dia</span>
+                  {" "}({med.active_prescriptions_count} paciente{med.active_prescriptions_count !== 1 ? "s" : ""})
+                </p>
+                {med.days_remaining !== null && (
+                  <p className="text-red-600 font-medium mt-1">
+                    Acaba em aprox. {Math.ceil(med.days_remaining)} dias
+                    {med.estimated_depletion_date && (
+                      <span className="font-normal text-red-500 ml-1">
+                        ({new Date(med.estimated_depletion_date + "T00:00:00").toLocaleDateString("pt-BR")})
+                      </span>
+                    )}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* All medications */}
+      <div>
+        <h2 className="font-semibold text-gray-700 mb-3">Todos os medicamentos</h2>
+        {allMeds.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+              <IconPackage className="w-7 h-7 text-gray-400" />
+            </div>
+            <p className="font-medium text-gray-500">Nenhum medicamento cadastrado</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+            {/* Mobile: card list */}
+            <div className="divide-y divide-gray-100 sm:hidden">
+              {allMeds.map((med) => (
+                <div key={med.id} className={`p-4 ${med.alert ? "bg-red-50" : ""}`}>
+                  <div className="flex items-start justify-between gap-3 mb-1.5">
+                    <p className="font-medium text-gray-900 text-sm">{med.name}</p>
+                    {med.alert && (
+                      <span className="shrink-0 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
+                        Baixo
+                      </span>
+                    )}
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Estoque: {med.stock_quantity ?? "—"} {med.stock_unit}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    Consumo: {med.daily_consumption}/{med.stock_unit}/dia ({med.active_prescriptions_count} pacientes)
-                  </p>
-                  {med.days_remaining !== null && (
-                    <p className="text-sm text-red-600 font-medium">
-                      Acaba em: ~{Math.ceil(med.days_remaining)} dias
-                      {med.estimated_depletion_date && ` (${new Date(med.estimated_depletion_date + "T00:00:00").toLocaleDateString("pt-BR")})`}
-                    </p>
-                  )}
+                  <div className="flex gap-4 text-xs text-gray-500">
+                    <span>Estoque: <span className="font-medium text-gray-700">
+                      {med.stock_quantity !== null ? `${med.stock_quantity} ${med.stock_unit}` : "—"}
+                    </span></span>
+                    {med.daily_consumption > 0 && (
+                      <span>Consumo: <span className="font-medium text-gray-700">{med.daily_consumption}/dia</span></span>
+                    )}
+                    {med.days_remaining !== null && (
+                      <span className={med.alert ? "text-red-600 font-semibold" : ""}>
+                        {Math.ceil(med.days_remaining)} dias
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-      )}
 
-      <h2 className="font-semibold text-gray-700 mb-2">Todos os Medicamentos</h2>
-      {allMeds.length === 0 ? (
-        <p className="text-gray-400 text-sm">Nenhum medicamento cadastrado.</p>
-      ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-2 text-gray-600">Medicamento</th>
-                <th className="text-right px-4 py-2 text-gray-600">Estoque</th>
-                <th className="text-right px-4 py-2 text-gray-600">Consumo</th>
-                <th className="text-right px-4 py-2 text-gray-600">Dias</th>
-              </tr>
-            </thead>
-            <tbody>
-              {allMeds.map((med, i) => (
-                <tr key={med.id} className={`border-t border-gray-100 ${med.alert ? "bg-red-50" : i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
-                  <td className="px-4 py-2 font-medium text-gray-800">{med.name}</td>
-                  <td className="px-4 py-2 text-right text-gray-600">
-                    {med.stock_quantity !== null ? `${med.stock_quantity} ${med.stock_unit}` : "—"}
-                  </td>
-                  <td className="px-4 py-2 text-right text-gray-600">
-                    {med.daily_consumption > 0 ? `${med.daily_consumption}/dia` : "—"}
-                  </td>
-                  <td className={`px-4 py-2 text-right font-medium ${med.alert ? "text-red-600" : "text-gray-700"}`}>
-                    {med.days_remaining !== null ? `${Math.ceil(med.days_remaining)} dias` : "—"}
-                  </td>
+            {/* Desktop: table */}
+            <table className="hidden sm:table w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Medicamento</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Estoque</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Consumo/dia</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Dias rest.</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {allMeds.map((med) => (
+                  <tr key={med.id} className={med.alert ? "bg-red-50" : "hover:bg-gray-50"}>
+                    <td className="px-4 py-3 font-medium text-gray-900">{med.name}</td>
+                    <td className="px-4 py-3 text-right text-gray-600">
+                      {med.stock_quantity !== null ? `${med.stock_quantity} ${med.stock_unit}` : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-600">
+                      {med.daily_consumption > 0 ? `${med.daily_consumption}` : "—"}
+                    </td>
+                    <td className={`px-4 py-3 text-right font-semibold ${med.alert ? "text-red-600" : "text-gray-700"}`}>
+                      {med.days_remaining !== null ? `${Math.ceil(med.days_remaining)}d` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
