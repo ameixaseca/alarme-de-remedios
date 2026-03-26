@@ -188,7 +188,8 @@ export default function HomePage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const result = await api.get<{ date: string; items: PendingItem[] }>("/dashboard/pending");
+      const tzOffset = -new Date().getTimezoneOffset(); // e.g. -180 for UTC-3
+      const result = await api.get<{ date: string; items: PendingItem[] }>(`/dashboard/pending?tz_offset=${tzOffset}`);
       setData(result);
     } catch { } finally {
       setLoading(false);

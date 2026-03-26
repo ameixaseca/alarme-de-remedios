@@ -3,7 +3,9 @@ import { prisma } from "@/lib/prisma";
 const OVERDUE_TOLERANCE_MINUTES = 15;
 const LOW_STOCK_DAYS = 7;
 
-export async function getPendingMedications(userId: string) {
+export async function getPendingMedications(userId: string, tzOffset: number = 0) {
+  // tzOffset: minutes from UTC, e.g. -180 for UTC-3 (Brazil).
+  // getTimezoneOffset() on the client returns the negated value, so the caller should negate it.
   const memberGroups = await prisma.groupMember.findMany({
     where: { userId },
     select: { groupId: true },
@@ -11,10 +13,15 @@ export async function getPendingMedications(userId: string) {
   const groupIds = memberGroups.map((m) => m.groupId);
 
   const now = new Date();
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date(now);
-  todayEnd.setHours(23, 59, 59, 999);
+  const offsetMs = tzOffset * 60 * 1000;
+
+  // Derive the user's local date string ("YYYY-MM-DD") from now + offset
+  const localNow = new Date(now.getTime() + offsetMs);
+  const localDateStr = localNow.toISOString().slice(0, 10);
+
+  // Build day boundaries in UTC that correspond to local midnight / end-of-day
+  const todayStart = new Date(Date.parse(`${localDateStr}T00:00:00Z`) - offsetMs);
+  const todayEnd   = new Date(Date.parse(`${localDateStr}T23:59:59.999Z`) - offsetMs);
 
   const prescriptions = await prisma.prescription.findMany({
     where: {
@@ -38,9 +45,8 @@ export async function getPendingMedications(userId: string) {
     const times = prescription.scheduleTimes as string[];
 
     for (const timeStr of times) {
-      const [hours, minutes] = timeStr.split(":").map(Number);
-      const scheduledAt = new Date(todayStart);
-      scheduledAt.setHours(hours, minutes, 0, 0);
+      // Build scheduledAt as the correct UTC instant for "timeStr" in the user's local timezone
+      const scheduledAt = new Date(Date.parse(`${localDateStr}T${timeStr}:00Z`) - offsetMs);
 
       // Skip slots that are before the prescription's start date+time
       if (scheduledAt < prescription.startDate) continue;

@@ -6,7 +6,8 @@ export async function GET(req: NextRequest) {
   const user = getUserFromRequest(req);
   if (!user) return unauthorized();
   try {
-    const result = await getPendingMedications(user.userId);
+    const tzOffset = parseInt(req.nextUrl.searchParams.get("tz_offset") ?? "0", 10);
+    const result = await getPendingMedications(user.userId, isNaN(tzOffset) ? 0 : tzOffset);
     return NextResponse.json(result);
   } catch (err: any) {
     return badRequest(err.message);
