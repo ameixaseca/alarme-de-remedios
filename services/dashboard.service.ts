@@ -31,7 +31,7 @@ export async function getPendingMedications(userId: string, tzOffset: number = 0
       OR: [{ endDate: null }, { endDate: { gte: todayStart } }],
     },
     include: {
-      patient: { select: { id: true, name: true, species: true } },
+      patient: { select: { id: true, name: true, species: true, photoUrl: true } },
       medication: { select: { id: true, name: true, doseUnit: true } },
       applications: {
         where: { appliedAt: { gte: todayStart, lte: todayEnd } },
@@ -68,7 +68,7 @@ export async function getPendingMedications(userId: string, tzOffset: number = 0
         const minutesOverdue = isOverdue ? Math.floor((now.getTime() - scheduledAt.getTime()) / 60000) : 0;
 
         items.push({
-          patient: prescription.patient,
+          patient: { ...prescription.patient, photo_url: prescription.patient.photoUrl },
           prescription: { id: prescription.id },
           medication: prescription.medication,
           scheduled_at: scheduledAt.toISOString(),

@@ -5,7 +5,7 @@ import { IconClock, IconAlertTriangle, IconCheck, IconPaw, IconPerson } from "@/
 import { PageLoading } from "@/app/components/loading";
 
 interface PendingItem {
-  patient: { id: string; name: string; species: string };
+  patient: { id: string; name: string; species: string; photo_url?: string };
   prescription: { id: string };
   medication: { id: string; name: string; dose_unit: string };
   scheduled_at: string;
@@ -19,25 +19,48 @@ interface PendingItem {
 }
 
 /* ─── Apply modal ───────────────────────────────────────── */
-function ApplyModal({ item, onClose, onSuccess }: { item: PendingItem; onClose: () => void; onSuccess: () => void }) {
+function ApplyModal({
+  item,
+  onClose,
+  onSuccess,
+}: {
+  item: PendingItem;
+  onClose: () => void;
+  /** queued=true when the app was stored offline and will sync later */
+  onSuccess: (queued: boolean) => void;
+}) {
   const [dose, setDose] = useState(item.dose_quantity.toString());
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isOffline, setIsOffline] = useState(
+    typeof window !== "undefined" ? !navigator.onLine : false
+  );
+
+  useEffect(() => {
+    const onOnline  = () => setIsOffline(false);
+    const onOffline = () => setIsOffline(true);
+    window.addEventListener("online",  onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online",  onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
     try {
-      await api.post("/applications", {
+      const result = await api.post<{ queued?: boolean }>("/applications", {
         prescription_id: item.prescription.id,
         applied_at: new Date().toISOString(),
         scheduled_at: item.scheduled_at,
         dose_applied: parseFloat(dose),
         notes: notes || undefined,
       });
-      onSuccess();
+      onSuccess(result.queued === true);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -62,7 +85,20 @@ function ApplyModal({ item, onClose, onSuccess }: { item: PendingItem; onClose: 
           </p>
         </div>
         <form onSubmit={handleSubmit} className="px-5 py-4 space-y-4">
-          {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2.5">{error}</div>}
+          {/* Offline warning */}
+          {isOffline && (
+            <div className="bg-amber-50 border border-amber-300 text-amber-800 text-xs rounded-lg px-3 py-2.5 leading-relaxed">
+              <span className="font-semibold">Você está offline.</span> Esta aplicação será salva
+              localmente e sincronizada quando a conexão for reestabelecida. Caso outro membro do
+              grupo registre a mesma aplicação online, poderá ocorrer duplicidade — registre com
+              cautela.
+            </div>
+          )}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2.5">
+              {error}
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Dose aplicada <span className="text-gray-400 font-normal">({item.dose_unit})</span>
@@ -89,8 +125,12 @@ function ApplyModal({ item, onClose, onSuccess }: { item: PendingItem; onClose: 
               Cancelar
             </button>
             <button type="submit" disabled={loading}
-              className="flex-1 bg-indigo-600 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-              {loading ? "Salvando…" : "Confirmar"}
+              className={`flex-1 text-white rounded-lg py-2.5 text-sm font-semibold disabled:opacity-50 transition-colors ${
+                isOffline
+                  ? "bg-amber-500 hover:bg-amber-600"
+                  : "bg-indigo-600 hover:bg-indigo-700"
+              }`}>
+              {loading ? "Salvando…" : isOffline ? "Salvar offline" : "Confirmar"}
             </button>
           </div>
         </form>
@@ -114,10 +154,16 @@ function PendingCard({ item, onApply }: { item: PendingItem; onApply: () => void
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-3 min-w-0">
             {/* Patient avatar */}
-            <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${isHuman ? "bg-blue-100" : "bg-amber-100"}`}>
-              {isHuman
-                ? <IconPerson className="w-4.5 h-4.5 text-blue-600" />
-                : <IconPaw className="w-4.5 h-4.5 text-amber-600" />}
+            <div className="w-9 h-9 rounded-full shrink-0 overflow-hidden">
+              {item.patient.photo_url ? (
+                <img src={item.patient.photo_url} alt={item.patient.name} className="w-full h-full object-cover" style={{ maxWidth: "none", maxHeight: "none" }} />
+              ) : (
+                <div className={`w-full h-full flex items-center justify-center ${isHuman ? "bg-blue-100" : "bg-amber-100"}`}>
+                  {isHuman
+                    ? <IconPerson className="w-4.5 h-4.5 text-blue-600" />
+                    : <IconPaw className="w-4.5 h-4.5 text-amber-600" />}
+                </div>
+              )}
             </div>
             <div className="min-w-0">
               <p className="font-semibold text-gray-900 text-sm leading-tight truncate">{item.patient.name}</p>
@@ -180,6 +226,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [applyItem, setApplyItem] = useState<PendingItem | null>(null);
   const [countdown, setCountdown] = useState(60);
+  const [queuedToast, setQueuedToast] = useState(0); // count of newly queued items this session
 
   // Filters
   const [patientFilter, setPatientFilter] = useState("");
@@ -377,13 +424,28 @@ export default function HomePage() {
         <ApplyModal
           item={applyItem}
           onClose={() => setApplyItem(null)}
-          onSuccess={() => {
+          onSuccess={(queued) => {
             const applied = applyItem;
             setApplyItem(null);
-            setData((prev) => prev ? { ...prev, items: prev.items.filter((i) => i !== applied) } : prev);
-            fetchData();
+            // Remove card optimistically regardless of queued/online
+            setData((prev) =>
+              prev ? { ...prev, items: prev.items.filter((i) => i !== applied) } : prev
+            );
+            if (queued) {
+              setQueuedToast((n) => n + 1);
+              setTimeout(() => setQueuedToast((n) => Math.max(0, n - 1)), 5000);
+            } else {
+              fetchData();
+            }
           }}
         />
+      )}
+
+      {/* Queued offline toast */}
+      {queuedToast > 0 && (
+        <div className="fixed bottom-24 lg:bottom-6 left-1/2 -translate-x-1/2 z-50 bg-amber-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg whitespace-nowrap">
+          Salvo offline — será sincronizado ao reconectar
+        </div>
       )}
     </div>
   );

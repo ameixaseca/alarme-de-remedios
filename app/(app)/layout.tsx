@@ -1,11 +1,85 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   IconHome, IconPackage, IconUsers, IconPill,
   IconGroup, IconClipboard, IconLogOut,
 } from "@/app/components/icons";
+
+/* ─── Offline banner ────────────────────────────────────── */
+function OfflineBanner() {
+  const [isOnline, setIsOnline] = useState(true);
+  const [queueCount, setQueueCount] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+
+    const onOnline  = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    const onQueue   = (e: Event) => {
+      setQueueCount((e as CustomEvent<{ count: number }>).detail.count);
+    };
+    const onSynced  = () => setSyncing(false);
+
+    window.addEventListener("online",           onOnline);
+    window.addEventListener("offline",          onOffline);
+    window.addEventListener("sw-queue-changed", onQueue);
+    window.addEventListener("sw-sync-done",     onSynced);
+
+    return () => {
+      window.removeEventListener("online",           onOnline);
+      window.removeEventListener("offline",          onOffline);
+      window.removeEventListener("sw-queue-changed", onQueue);
+      window.removeEventListener("sw-sync-done",     onSynced);
+    };
+  }, []);
+
+  function triggerSync() {
+    setSyncing(true);
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.ready.then((reg) => {
+      if ("sync" in reg) {
+        (reg as ServiceWorkerRegistration & { sync: { register: (t: string) => Promise<void> } })
+          .sync.register("sync-applications")
+          .catch(() => reg.active?.postMessage({ type: "SYNC_NOW" }));
+      } else {
+        reg.active?.postMessage({ type: "SYNC_NOW" });
+      }
+    });
+  }
+
+  if (isOnline && queueCount === 0) return null;
+
+  if (!isOnline) {
+    return (
+      <div className="bg-amber-500 text-white text-xs font-medium px-4 py-2 flex items-center justify-between gap-2">
+        <span>Sem conexão — exibindo dados do cache</span>
+        {queueCount > 0 && (
+          <span className="bg-amber-700/60 px-2 py-0.5 rounded-full whitespace-nowrap">
+            {queueCount} aplicaç{queueCount !== 1 ? "ões" : "ão"} na fila
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-indigo-600 text-white text-xs font-medium px-4 py-2 flex items-center justify-between gap-2">
+      <span>
+        {queueCount} aplicaç{queueCount !== 1 ? "ões" : "ão"} offline aguardando sincronização
+      </span>
+      <button
+        onClick={triggerSync}
+        disabled={syncing}
+        className="bg-white text-indigo-700 px-3 py-1 rounded-full font-semibold disabled:opacity-60 whitespace-nowrap"
+      >
+        {syncing ? "Sincronizando…" : "Sincronizar agora"}
+      </button>
+    </div>
+  );
+}
 
 const navItems = [
   { href: "/home",        label: "Início",     Icon: IconHome },
@@ -104,6 +178,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         Desktop: ml-60 (sidebar width), no extra padding
       */}
       <main className="lg:ml-60 pt-14 lg:pt-0 pb-20 lg:pb-0">
+        <OfflineBanner />
         <div className="max-w-3xl mx-auto px-4 py-6 lg:px-8 lg:py-8 lg:max-w-4xl">
           {children}
         </div>
