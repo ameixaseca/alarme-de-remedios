@@ -6,6 +6,12 @@ datasource db {
   provider  = "postgresql"
 }
 
+enum PrescriptionAction {
+  create
+  update
+  delete
+}
+
 enum ApplicationMethod {
   oral
   injectable
@@ -39,6 +45,7 @@ model User {
   prescriptions    Prescription[]
   applications     Application[]
   createdGroups    Group[]
+  prescriptionLogs PrescriptionLog[]
 }
 
 model Group {
@@ -124,6 +131,21 @@ model Prescription {
   medication Medication   @relation(fields: [medicationId], references: [id], onDelete: Cascade)
   creator    User         @relation(fields: [createdBy], references: [id])
   applications Application[]
+}
+
+model PrescriptionLog {
+  id             String             @id @default(uuid())
+  prescriptionId String?
+  patientId      String
+  patientName    String
+  medicationId   String
+  medicationName String
+  action         PrescriptionAction
+  performedBy    String
+  performedAt    DateTime           @default(now())
+  changes        Json?
+
+  performer User @relation(fields: [performedBy], references: [id])
 }
 
 model Application {

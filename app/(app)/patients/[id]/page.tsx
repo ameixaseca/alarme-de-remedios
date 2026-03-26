@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/client/api";
-import { IconPaw, IconPerson, IconChevronLeft, IconPlus, IconCamera } from "@/app/components/icons";
+import { IconPaw, IconPerson, IconChevronLeft, IconPlus, IconCamera, IconTrash } from "@/app/components/icons";
 import { PageLoading } from "@/app/components/loading";
 import { PhotoCropModal } from "@/app/components/PhotoCropModal";
 
@@ -27,8 +27,28 @@ interface Prescription {
   doseUnit: string;
   frequencyHours: number;
   scheduleTimes: string[];
-  medication: { id: string; name: string };
+  durationDays?: number;
+  medication: { id: string; name: string; doseUnit: string };
 }
+
+const TABLET_UNITS = new Set(["comprimido", "cápsula", "drágea", "pastilha"]);
+const FRACTION_OPTIONS = [
+  { label: "1 (inteiro)", value: "1", quantity: 1, fraction: null },
+  { label: "1/2", value: "1/2", quantity: 0.5, fraction: "1/2" },
+  { label: "1/3", value: "1/3", quantity: 0.3333, fraction: "1/3" },
+  { label: "1/4", value: "1/4", quantity: 0.25, fraction: "1/4" },
+  { label: "2/3", value: "2/3", quantity: 0.6667, fraction: "2/3" },
+  { label: "3/4", value: "3/4", quantity: 0.75, fraction: "3/4" },
+  { label: "Personalizado", value: "custom", quantity: null, fraction: null },
+];
+const FREQUENCY_PRESETS = [
+  { label: "24h", hours: 24 },
+  { label: "12h", hours: 12 },
+  { label: "8h", hours: 8 },
+  { label: "6h", hours: 6 },
+  { label: "4h", hours: 4 },
+  { label: "Outro", hours: null },
+];
 
 const GENDER_OPTIONS = ["Masculino", "Feminino", "Outro"];
 
@@ -60,6 +80,8 @@ export default function PatientDetailPage() {
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [editingPrescription, setEditingPrescription] = useState<Prescription | null>(null);
+  const [deletingPrescriptionId, setDeletingPrescriptionId] = useState<string | null>(null);
 
   const isHuman = patient?.species === "Humano";
   const isEditHuman = form.species === "Humano";
@@ -128,6 +150,17 @@ export default function PatientDetailPage() {
     }
   }
 
+  async function handleDeletePrescription(prescriptionId: string) {
+    try {
+      await api.delete(`/prescriptions/${prescriptionId}`);
+      setPrescriptions((prev) => prev.filter((p) => p.id !== prescriptionId));
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setDeletingPrescriptionId(null);
+    }
+  }
+
   if (loading) return <PageLoading />;
   if (!patient) return <div className="flex justify-center py-20 text-red-400 text-sm">Paciente não encontrado.</div>;
 
@@ -139,6 +172,44 @@ export default function PatientDetailPage() {
           onConfirm={handleCropConfirm}
           onCancel={() => setCropFile(null)}
         />
+      )}
+
+      {/* Edit prescription modal */}
+      {editingPrescription && (
+        <EditPrescriptionModal
+          prescription={editingPrescription}
+          onClose={() => setEditingPrescription(null)}
+          onSaved={(updated) => {
+            setPrescriptions((prev) => prev.map((p) => p.id === updated.id ? { ...p, ...updated } : p));
+            setEditingPrescription(null);
+          }}
+        />
+      )}
+
+      {/* Delete prescription confirm */}
+      {deletingPrescriptionId && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl p-6">
+            <h2 className="font-semibold text-gray-900 mb-2">Excluir prescrição?</h2>
+            <p className="text-sm text-gray-500 mb-6">
+              Essa ação não pode ser desfeita. As aplicações já registradas serão mantidas no histórico.
+            </p>
+            <div className="flex gap-2.5">
+              <button
+                onClick={() => setDeletingPrescriptionId(null)}
+                className="flex-1 border border-gray-300 rounded-lg py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDeletePrescription(deletingPrescriptionId)}
+                className="flex-1 bg-red-600 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-red-700"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Hidden file input */}
@@ -374,7 +445,7 @@ export default function PatientDetailPage() {
           <div className="space-y-2">
             {prescriptions.map((p) => (
               <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-4">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="min-w-0">
                     <p className="font-medium text-gray-900 text-sm truncate">{p.medication.name}</p>
                     <p className="text-xs text-gray-500 mt-0.5">
@@ -388,10 +459,250 @@ export default function PatientDetailPage() {
                     {statusLabel[p.status] ?? p.status}
                   </span>
                 </div>
+                <div className="flex gap-2 border-t border-gray-100 pt-3">
+                  <button
+                    onClick={() => setEditingPrescription(p)}
+                    className="flex-1 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg py-1.5 hover:bg-gray-50 transition-colors"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => setDeletingPrescriptionId(p.id)}
+                    className="w-8 flex items-center justify-center text-red-400 border border-red-100 rounded-lg hover:bg-red-50 transition-colors"
+                  >
+                    <IconTrash className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Edit Prescription Modal ───────────────────────────── */
+function EditPrescriptionModal({
+  prescription,
+  onClose,
+  onSaved,
+}: {
+  prescription: Prescription;
+  onClose: () => void;
+  onSaved: (updated: Partial<Prescription> & { id: string }) => void;
+}) {
+  const isTablet = TABLET_UNITS.has((prescription.medication.doseUnit ?? prescription.doseUnit).toLowerCase().trim());
+
+  const initFractionKey = () => {
+    if (!isTablet) return "custom";
+    const opt = FRACTION_OPTIONS.find((o) => o.quantity !== null && Math.abs((o.quantity ?? 0) - prescription.doseQuantity) < 0.001);
+    return opt ? opt.value : "custom";
+  };
+
+  const [fractionKey, setFractionKey] = useState(initFractionKey);
+  const [customQty, setCustomQty] = useState(
+    isTablet && initFractionKey() === "custom" ? String(prescription.doseQuantity) : String(prescription.doseQuantity)
+  );
+  const [freqPreset, setFreqPreset] = useState(
+    FREQUENCY_PRESETS.find((p) => p.hours === prescription.frequencyHours) ? String(prescription.frequencyHours) : "custom"
+  );
+  const [customFreq, setCustomFreq] = useState(
+    FREQUENCY_PRESETS.find((p) => p.hours === prescription.frequencyHours) ? "" : String(prescription.frequencyHours)
+  );
+  const [scheduleTimes, setScheduleTimes] = useState<string[]>(prescription.scheduleTimes as string[]);
+  const [status, setStatus] = useState(prescription.status);
+  const [durationDays, setDurationDays] = useState(prescription.durationDays ? String(prescription.durationDays) : "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const doseQuantity = isTablet
+    ? (fractionKey === "custom" ? parseFloat(customQty) || null : FRACTION_OPTIONS.find((o) => o.value === fractionKey)?.quantity ?? null)
+    : parseFloat(customQty) || null;
+
+  const doseFraction = isTablet && fractionKey !== "1" && fractionKey !== "custom" ? fractionKey : undefined;
+
+  const frequencyHours = freqPreset === "custom"
+    ? (parseFloat(customFreq) || null)
+    : parseFloat(freqPreset);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!doseQuantity || !frequencyHours) { setError("Preencha todos os campos obrigatórios."); return; }
+    if (frequencyHours < 3) { setError("A frequência mínima é a cada 3 horas."); return; }
+    if (scheduleTimes.length === 0) { setError("Adicione pelo menos um horário."); return; }
+    setSaving(true);
+    setError("");
+    try {
+      await api.patch(`/prescriptions/${prescription.id}`, {
+        dose_quantity: doseQuantity,
+        dose_fraction: doseFraction,
+        frequency_hours: frequencyHours,
+        schedule_times: scheduleTimes,
+        status,
+        duration_days: durationDays ? parseInt(durationDays) : undefined,
+      });
+      onSaved({
+        id: prescription.id,
+        doseQuantity,
+        doseFraction,
+        frequencyHours,
+        scheduleTimes,
+        status,
+        durationDays: durationDays ? parseInt(durationDays) : undefined,
+      });
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 px-4 pb-4 sm:pb-0">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
+        <div className="px-5 pt-5 pb-4 border-b border-gray-100 flex items-start justify-between">
+          <div>
+            <h2 className="font-semibold text-gray-900">Editar Prescrição</h2>
+            <p className="text-sm text-gray-500 mt-0.5">{prescription.medication.name}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-5 py-4 space-y-4">
+          {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2.5">{error}</div>}
+
+          {/* Status */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">Status</label>
+            <div className="flex gap-2">
+              {(["active", "paused", "finished"] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStatus(s)}
+                  className={`flex-1 py-2 text-xs font-medium rounded-lg border transition-colors ${
+                    status === s ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 border-gray-200 hover:border-indigo-300"
+                  }`}
+                >
+                  {{ active: "Ativa", paused: "Pausada", finished: "Encerrada" }[s]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Dose */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">
+              Dose por aplicação <span className="text-gray-400">({prescription.doseUnit})</span>
+            </label>
+            {isTablet ? (
+              <div className="flex gap-2 items-center">
+                <select
+                  value={fractionKey}
+                  onChange={(e) => setFractionKey(e.target.value)}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                >
+                  {FRACTION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                {fractionKey === "custom" && (
+                  <input
+                    type="number" step="0.01" min="0.01" required
+                    value={customQty}
+                    onChange={(e) => setCustomQty(e.target.value)}
+                    className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  />
+                )}
+              </div>
+            ) : (
+              <input
+                type="number" step="0.01" min="0.01" required
+                value={customQty}
+                onChange={(e) => setCustomQty(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              />
+            )}
+          </div>
+
+          {/* Frequency */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">Frequência</label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {FREQUENCY_PRESETS.map((p) => (
+                <button
+                  key={p.hours ?? "custom"}
+                  type="button"
+                  onClick={() => setFreqPreset(p.hours ? String(p.hours) : "custom")}
+                  className={`py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                    freqPreset === (p.hours ? String(p.hours) : "custom")
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-white text-gray-600 border-gray-200 hover:border-indigo-300"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            {freqPreset === "custom" && (
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  type="number" step="0.5" min="3" required
+                  placeholder="horas"
+                  value={customFreq}
+                  onChange={(e) => setCustomFreq(e.target.value)}
+                  className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                />
+                <span className="text-sm text-gray-500">horas entre doses</span>
+              </div>
+            )}
+          </div>
+
+          {/* Schedule times */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">Horários</label>
+            <div className="space-y-1.5">
+              {scheduleTimes.map((t, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    type="time"
+                    value={t}
+                    onChange={(e) => setScheduleTimes((prev) => prev.map((x, j) => j === i ? e.target.value : x))}
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setScheduleTimes((prev) => prev.filter((_, j) => j !== i))}
+                    disabled={scheduleTimes.length <= 1}
+                    className="text-red-400 hover:text-red-600 disabled:opacity-30 text-lg leading-none"
+                  >✕</button>
+                </div>
+              ))}
+              <button type="button" onClick={() => setScheduleTimes((p) => [...p, "08:00"])} className="text-indigo-600 text-xs hover:text-indigo-800">
+                + Adicionar horário
+              </button>
+            </div>
+          </div>
+
+          {/* Duration */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">Duração (dias)</label>
+            <input
+              type="number" min="1" placeholder="ilimitado"
+              value={durationDays}
+              onChange={(e) => setDurationDays(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div className="flex gap-2.5 pt-1">
+            <button type="button" onClick={onClose} className="flex-1 border border-gray-300 rounded-lg py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">
+              Cancelar
+            </button>
+            <button type="submit" disabled={saving} className="flex-1 bg-indigo-600 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+              {saving ? "Salvando…" : "Salvar"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
