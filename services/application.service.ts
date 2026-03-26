@@ -44,6 +44,72 @@ export async function listApplications(userId: string, prescriptionId?: string, 
   });
 }
 
+export async function listApplicationLog(
+  userId: string,
+  opts: {
+    patientId?: string;
+    medicationId?: string;
+    from?: string;
+    to?: string;
+    take?: number;
+    skip?: number;
+  } = {}
+) {
+  const memberGroups = await prisma.groupMember.findMany({
+    where: { userId },
+    select: { groupId: true },
+  });
+  const groupIds = memberGroups.map((m) => m.groupId);
+
+  const dateFilter: Record<string, unknown> = {};
+  if (opts.from) dateFilter.gte = new Date(opts.from);
+  if (opts.to) dateFilter.lte = new Date(opts.to);
+
+  const where = {
+    prescription: {
+      patient: { groupId: { in: groupIds } },
+      ...(opts.patientId && { patientId: opts.patientId }),
+      ...(opts.medicationId && { medicationId: opts.medicationId }),
+    },
+    ...(Object.keys(dateFilter).length > 0 && { appliedAt: dateFilter }),
+  };
+
+  const [total, items] = await prisma.$transaction([
+    prisma.application.count({ where }),
+    prisma.application.findMany({
+      where,
+      include: {
+        applier: { select: { id: true, name: true, email: true } },
+        prescription: {
+          include: {
+            patient: { select: { id: true, name: true, species: true } },
+            medication: { select: { id: true, name: true, doseUnit: true } },
+          },
+        },
+      },
+      orderBy: { appliedAt: "desc" },
+      take: opts.take ?? 50,
+      skip: opts.skip ?? 0,
+    }),
+  ]);
+
+  return {
+    total,
+    items: items.map((a) => ({
+      id: a.id,
+      appliedAt: a.appliedAt,
+      scheduledAt: a.scheduledAt,
+      doseApplied: a.doseApplied,
+      doseUnit: a.prescription.medication.doseUnit,
+      notes: a.notes,
+      applier: a.applier,
+      patient: a.prescription.patient,
+      medication: a.prescription.medication,
+      prescriptionId: a.prescriptionId,
+    })),
+  };
+}
+
 export async function createApplication(
   userId: string,
   data: {

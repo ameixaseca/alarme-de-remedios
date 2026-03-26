@@ -5,7 +5,7 @@ const spec = {
   info: {
     title: "DailyMed API",
     version: "1.0.0",
-    description: "Sistema de controle de aplicação de medicação para pets",
+    description: "Sistema colaborativo de controle de aplicação de medicação",
   },
   servers: [{ url: "/api/v1" }],
   components: {

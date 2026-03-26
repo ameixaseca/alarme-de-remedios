@@ -34,7 +34,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="bg-white rounded-2xl shadow p-8 w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-center text-indigo-600 mb-6">🐾 DailyMed</h1>
+        <h1 className="text-2xl font-bold text-center text-indigo-600 mb-6">💊 DailyMed</h1>
         <h2 className="text-lg font-semibold text-center text-gray-700 mb-6">Criar conta</h2>
         {error && <p className="bg-red-50 text-red-600 text-sm p-3 rounded-lg mb-4">{error}</p>}
         <form onSubmit={handleSubmit} className="space-y-4">

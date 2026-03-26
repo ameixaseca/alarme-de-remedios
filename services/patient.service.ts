@@ -37,6 +37,7 @@ export async function createPatient(
     species: string;
     breed?: string;
     birthDate?: string;
+    gender?: string;
     weightKg?: number;
     photoUrl?: string;
     notes?: string;
@@ -50,6 +51,7 @@ export async function createPatient(
       species: data.species,
       breed: data.breed,
       birthDate: data.birthDate ? new Date(data.birthDate) : undefined,
+      gender: data.gender,
       weightKg: data.weightKg,
       photoUrl: data.photoUrl,
       notes: data.notes,
@@ -69,6 +71,7 @@ export async function updatePatient(
     species?: string;
     breed?: string;
     birthDate?: string;
+    gender?: string;
     weightKg?: number;
     photoUrl?: string;
     notes?: string;

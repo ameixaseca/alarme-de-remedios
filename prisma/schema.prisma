@@ -74,6 +74,7 @@ model Patient {
   species    String
   breed      String?
   birthDate  DateTime?
+  gender     String?
   weightKg   Float?
   photoUrl   String?
   notes      String?
