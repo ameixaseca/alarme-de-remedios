@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ApplicationMethod {
+  oral
+  injectable
+  topical
+  ophthalmic
+  otic
+  inhalation
+  other
+}
+
+enum PrescriptionStatus {
+  active
+  paused
+  finished
+}
+
+enum GroupRole {
+  admin
+  member
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  groupMemberships GroupMember[]
+  prescriptions    Prescription[]
+  applications     Application[]
+  createdGroups    Group[]
+}
+
+model Group {
+  id         String   @id @default(uuid())
+  name       String
+  inviteCode String   @unique
+  createdBy  String
+  creator    User     @relation(fields: [createdBy], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  members     GroupMember[]
+  patients    Patient[]
+  medications Medication[]
+}
+
+model GroupMember {
+  userId   String
+  groupId  String
+  role     GroupRole @default(member)
+  joinedAt DateTime  @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([userId, groupId])
+}
+
+model Patient {
+  id         String    @id @default(uuid())
+  groupId    String
+  name       String
+  species    String
+  breed      String?
+  birthDate  DateTime?
+  weightKg   Float?
+  photoUrl   String?
+  notes      String?
+  isArchived Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  group         Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  prescriptions Prescription[]
+}
+
+model Medication {
+  id                String            @id @default(uuid())
+  groupId           String
+  name              String
+  manufacturer      String?
+  activeIngredient  String?
+  applicationMethod ApplicationMethod @default(oral)
+  doseUnit          String
+  stockQuantity     Float?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  group         Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  prescriptions Prescription[]
+}
+
+model Prescription {
+  id             String             @id @default(uuid())
+  patientId      String
+  medicationId   String
+  doseQuantity   Float
+  doseFraction   String?
+  doseUnit       String
+  frequencyHours Float
+  scheduleTimes  Json               @default("[]")
+  durationDays   Int?
+  startDate      DateTime           @default(now())
+  endDate        DateTime?
+  status         PrescriptionStatus @default(active)
+  createdBy      String
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  patient    Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  medication Medication   @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  creator    User         @relation(fields: [createdBy], references: [id])
+  applications Application[]
+}
+
+model Application {
+  id             String   @id @default(uuid())
+  prescriptionId String
+  appliedBy      String
+  appliedAt      DateTime
+  scheduledAt    DateTime?
+  doseApplied    Float
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  applier      User         @relation(fields: [appliedBy], references: [id])
+}

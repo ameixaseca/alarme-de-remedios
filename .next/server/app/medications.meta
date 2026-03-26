@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(app)/layout,_N_T_/(app)/medications/layout,_N_T_/(app)/medications/page,_N_T_/medications"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGFwcCk/medications/__PAGE__",
+    "/!KGFwcCk/medications",
+    "/!KGFwcCk",
+    "/_index",
+    "/_head"
+  ]
+}
