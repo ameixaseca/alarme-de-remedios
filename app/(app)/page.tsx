@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/client/api";
-import { IconClock, IconAlertTriangle, IconCheck, IconPill } from "@/app/components/icons";
+import { IconClock, IconAlertTriangle, IconCheck } from "@/app/components/icons";
+import { PageLoading } from "@/app/components/loading";
 
 interface PendingItem {
   patient: { id: string; name: string; species: string };
@@ -201,9 +202,7 @@ export default function HomePage() {
     return () => clearInterval(tick);
   }, []);
 
-  if (loading) {
-    return <div className="flex items-center justify-center py-20 text-gray-400 text-sm">Carregando…</div>;
-  }
+  if (loading) return <PageLoading />;
 
   const today = data?.date
     ? new Date(data.date + "T00:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })

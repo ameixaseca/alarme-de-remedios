@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/client/api";
 import { IconChevronLeft } from "@/app/components/icons";
+import { PageLoading } from "@/app/components/loading";
 
 interface Medication {
   id: string;
@@ -160,7 +161,7 @@ export default function NewPrescriptionPage() {
     }
   }
 
-  if (loading) return <div className="text-center py-16 text-gray-400">Carregando...</div>;
+  if (loading) return <PageLoading />;
 
   return (
     <div className="max-w-lg mx-auto">

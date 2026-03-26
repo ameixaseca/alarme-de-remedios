@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/client/api";
 import { IconChevronLeft, IconPill } from "@/app/components/icons";
+import { PageLoading } from "@/app/components/loading";
 
 interface Medication {
   id: string;
@@ -65,7 +66,7 @@ export default function MedicationDetailPage() {
     router.replace("/medications");
   }
 
-  if (loading) return <div className="flex justify-center py-20 text-gray-400 text-sm">Carregando…</div>;
+  if (loading) return <PageLoading />;
   if (!med) return <div className="flex justify-center py-20 text-red-400 text-sm">Medicamento não encontrado.</div>;
 
   const stockLow = med.stockQuantity !== null && med.stockQuantity !== undefined && med.stockQuantity < 0;

@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/client/api";
 import { IconPaw, IconPerson, IconChevronLeft, IconPlus } from "@/app/components/icons";
+import { PageLoading } from "@/app/components/loading";
 
 interface Patient {
   id: string;
@@ -102,7 +103,7 @@ export default function PatientDetailPage() {
     router.replace("/patients");
   }
 
-  if (loading) return <div className="flex justify-center py-20 text-gray-400 text-sm">Carregando…</div>;
+  if (loading) return <PageLoading />;
   if (!patient) return <div className="flex justify-center py-20 text-red-400 text-sm">Paciente não encontrado.</div>;
 
   return (

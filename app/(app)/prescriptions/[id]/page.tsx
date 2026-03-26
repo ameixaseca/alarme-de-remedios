@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/client/api";
 import { PrescriptionStatus } from "@prisma/client";
+import { PageLoading } from "@/app/components/loading";
 
 interface Prescription {
   id: string;
@@ -83,7 +84,7 @@ export default function PrescriptionDetailPage() {
     }
   }
 
-  if (loading) return <div className="text-center py-16 text-gray-400">Carregando...</div>;
+  if (loading) return <PageLoading />;
   if (!prescription) return <div className="text-center py-16 text-red-400">Prescrição não encontrada.</div>;
 
   return (

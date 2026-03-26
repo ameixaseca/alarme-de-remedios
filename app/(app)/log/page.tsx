@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/client/api";
 import { IconClipboard } from "@/app/components/icons";
+import { SectionLoading } from "@/app/components/loading";
 
 interface LogEntry {
   id: string;
@@ -135,7 +136,7 @@ export default function LogPage() {
       {/* Results */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="flex justify-center py-16 text-gray-400 text-sm">Carregando…</div>
+          <SectionLoading />
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center py-16 text-center">
             <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-3">

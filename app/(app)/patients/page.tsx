@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { api } from "@/lib/client/api";
 import { IconPaw, IconPerson, IconChevronRight, IconPlus, IconX } from "@/app/components/icons";
+import { PageLoading } from "@/app/components/loading";
 
 interface Patient {
   id: string;
@@ -86,7 +87,7 @@ export default function PatientsPage() {
     }
   }
 
-  if (loading) return <div className="flex justify-center py-20 text-gray-400 text-sm">Carregando…</div>;
+  if (loading) return <PageLoading />;
 
   return (
     <div className="space-y-5">

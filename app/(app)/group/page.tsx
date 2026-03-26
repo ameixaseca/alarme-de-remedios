@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/client/api";
 import { IconGroup, IconCopy, IconCheck, IconRefresh, IconX, IconPlus } from "@/app/components/icons";
+import { PageLoading } from "@/app/components/loading";
 
 interface Group {
   id: string;
@@ -102,7 +103,7 @@ export default function GroupPage() {
     }
   }
 
-  if (loading) return <div className="flex justify-center py-20 text-gray-400 text-sm">Carregando…</div>;
+  if (loading) return <PageLoading />;
 
   const isAdmin = selectedGroup?.members.find((m) => m.user.id === currentUserId)?.role === "admin";
 

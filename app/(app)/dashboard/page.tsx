@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/client/api";
 import { IconAlertTriangle, IconPackage } from "@/app/components/icons";
+import { PageLoading } from "@/app/components/loading";
 
 interface StockItem {
   id: string;
@@ -25,7 +26,7 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="flex justify-center py-20 text-gray-400 text-sm">Carregando…</div>;
+  if (loading) return <PageLoading />;
 
   const alertMeds = data?.medications.filter((m) => m.alert) ?? [];
   const allMeds = data?.medications ?? [];
