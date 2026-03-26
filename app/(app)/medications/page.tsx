@@ -1,8 +1,8 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { api } from "@/lib/client/api";
-import { IconPill, IconChevronRight, IconPlus, IconX } from "@/app/components/icons";
+import { IconPill, IconChevronRight, IconPlus, IconX, IconCamera } from "@/app/components/icons";
 import { PageLoading } from "@/app/components/loading";
 
 interface Medication {
@@ -22,6 +22,27 @@ const METHOD_LABELS: Record<string, string> = {
 
 const DOSE_UNIT_PRESETS = ["comprimido", "cápsula", "ml", "mg", "mcg", "g", "gotas", "UI"];
 
+function resizeImage(file: File, maxPx: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+      // strip the "data:image/jpeg;base64," prefix
+      resolve(canvas.toDataURL("image/jpeg", 0.85).split(",")[1]);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
 export default function MedicationsPage() {
   const [medications, setMedications] = useState<Medication[]>([]);
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
@@ -32,6 +53,9 @@ export default function MedicationsPage() {
     application_method: "oral", dose_unit: "", dose_unit_custom: false, stock_quantity: "",
   });
   const [error, setError] = useState("");
+  const [identifying, setIdentifying] = useState(false);
+  const [identifyMsg, setIdentifyMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   async function fetchAll() {
     try {
@@ -50,6 +74,46 @@ export default function MedicationsPage() {
   }
 
   useEffect(() => { fetchAll(); }, []);
+
+  async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!e.target) return;
+    // reset so same file can be selected again
+    (e.target as HTMLInputElement).value = "";
+    if (!file) return;
+
+    setIdentifying(true);
+    setIdentifyMsg(null);
+    try {
+      // Resize client-side to max 1024px before sending
+      const imageData = await resizeImage(file, 1024);
+      const mediaType = "image/jpeg";
+
+      const result = await api.post<{
+        name?: string; active_ingredient?: string; manufacturer?: string;
+        dose_unit?: string; dose_unit_custom?: boolean; application_method?: string;
+      }>("/medications/identify", { image_data: imageData, media_type: mediaType });
+
+      setForm((prev) => {
+        const next = { ...prev };
+        if (result.name) next.name = result.name;
+        if (result.manufacturer) next.manufacturer = result.manufacturer;
+        if (result.active_ingredient) next.active_ingredient = result.active_ingredient;
+        if (result.application_method) next.application_method = result.application_method;
+        if (result.dose_unit) {
+          const isKnown = DOSE_UNIT_PRESETS.includes(result.dose_unit);
+          next.dose_unit = result.dose_unit;
+          next.dose_unit_custom = !isKnown;
+        }
+        return next;
+      });
+      setIdentifyMsg({ type: "success", text: "Campos preenchidos automaticamente. Revise e confirme." });
+    } catch (err: any) {
+      setIdentifyMsg({ type: "error", text: err.message ?? "Não foi possível identificar o medicamento." });
+    } finally {
+      setIdentifying(false);
+    }
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -80,7 +144,7 @@ export default function MedicationsPage() {
       <div className="flex items-center justify-between">
         <h1 className="font-bold text-xl text-gray-900">Medicamentos</h1>
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => { setShowForm(!showForm); setIdentifyMsg(null); setError(""); }}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors ${
             showForm
               ? "bg-gray-100 text-gray-600 hover:bg-gray-200"
@@ -94,7 +158,44 @@ export default function MedicationsPage() {
       {/* Create form */}
       {showForm && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h2 className="font-semibold text-gray-900 mb-4">Novo medicamento</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-900">Novo medicamento</h2>
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              disabled={identifying}
+              className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {identifying ? (
+                <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                </svg>
+              ) : (
+                <IconCamera className="w-3.5 h-3.5" />
+              )}
+              {identifying ? "Analisando…" : "Identificar pela foto"}
+            </button>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handlePhotoSelect}
+            />
+          </div>
+
+          {identifyMsg && (
+            <div className={`text-sm rounded-lg px-3.5 py-2.5 mb-4 flex items-start justify-between gap-2 ${
+              identifyMsg.type === "success"
+                ? "bg-green-50 border border-green-200 text-green-700"
+                : "bg-red-50 border border-red-200 text-red-700"
+            }`}>
+              <span>{identifyMsg.text}</span>
+              <button onClick={() => setIdentifyMsg(null)} className="shrink-0 opacity-60 hover:opacity-100">×</button>
+            </div>
+          )}
+
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3.5 py-3 mb-4">
               {error}

@@ -4,7 +4,9 @@
       "Bash(npx tsc:*)",
       "Bash(npx next:*)",
       "Bash(npx prisma:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npm install:*)",
+      "Bash(npm list:*)"
     ]
   }
 }
