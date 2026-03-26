@@ -44,6 +44,7 @@ model User {
 model Group {
   id         String   @id @default(uuid())
   name       String
+  photoUrl   String?
   inviteCode String   @unique
   createdBy  String
   creator    User     @relation(fields: [createdBy], references: [id])

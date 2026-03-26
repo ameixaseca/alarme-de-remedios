@@ -83,3 +83,7 @@ export function IconClock(p: IconProps) {
 export function IconArchive(p: IconProps) {
   return <svg {...base} {...p}><polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" /></svg>;
 }
+
+export function IconCamera(p: IconProps) {
+  return <svg {...base} {...p}><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" /><circle cx="12" cy="13" r="4" /></svg>;
+}

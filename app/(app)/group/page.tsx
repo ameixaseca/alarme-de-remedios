@@ -1,12 +1,14 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "@/lib/client/api";
-import { IconGroup, IconCopy, IconCheck, IconRefresh, IconX, IconPlus } from "@/app/components/icons";
+import { IconGroup, IconCopy, IconCheck, IconRefresh, IconX, IconPlus, IconCamera } from "@/app/components/icons";
 import { PageLoading } from "@/app/components/loading";
+import { PhotoCropModal } from "@/app/components/PhotoCropModal";
 
 interface Group {
   id: string;
   name: string;
+  photoUrl?: string;
   inviteCode: string;
   members: {
     role: string;
@@ -25,6 +27,9 @@ export default function GroupPage() {
   const [newGroupName, setNewGroupName] = useState("");
   const [error, setError] = useState("");
   const [currentUserId, setCurrentUserId] = useState("");
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function fetchGroups() {
     const data = await api.get<{ groups: { id: string; name: string }[] }>("/groups");
@@ -100,6 +105,26 @@ export default function GroupPage() {
       fetchGroups();
     } catch (err: any) {
       setError(err.message);
+    }
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) setCropFile(file);
+    e.target.value = "";
+  }
+
+  async function handleCropConfirm(base64: string) {
+    if (!selectedGroup) return;
+    setCropFile(null);
+    setUploadingPhoto(true);
+    try {
+      await api.patch(`/groups/${selectedGroup.id}`, { photo_url: base64 });
+      await handleSelectGroup(selectedGroup.id);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setUploadingPhoto(false);
     }
   }
 
@@ -206,12 +231,56 @@ export default function GroupPage() {
         </div>
       )}
 
+      {/* Hidden file input */}
+      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+
+      {/* Crop modal */}
+      {cropFile && (
+        <PhotoCropModal
+          file={cropFile}
+          onConfirm={handleCropConfirm}
+          onCancel={() => setCropFile(null)}
+        />
+      )}
+
       {/* Group detail */}
       {selectedGroup ? (
         <div className="space-y-4">
           {/* Invite code */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-            <h2 className="font-semibold text-gray-900 mb-3">{selectedGroup.name}</h2>
+            <div className="flex items-center gap-3 mb-3">
+              {/* Group photo */}
+              {isAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingPhoto}
+                  className="relative group shrink-0 w-12 h-12 rounded-full overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  title="Alterar foto do grupo"
+                >
+                  {selectedGroup.photoUrl ? (
+                    <img src={selectedGroup.photoUrl} alt={selectedGroup.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-indigo-100 flex items-center justify-center">
+                      <IconGroup className="w-6 h-6 text-indigo-500" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    {uploadingPhoto
+                      ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      : <IconCamera className="w-4 h-4 text-white" />
+                    }
+                  </div>
+                </button>
+              ) : selectedGroup.photoUrl ? (
+                <img src={selectedGroup.photoUrl} alt={selectedGroup.name} className="w-12 h-12 rounded-full object-cover shrink-0" />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+                  <IconGroup className="w-6 h-6 text-indigo-500" />
+                </div>
+              )}
+              <h2 className="font-semibold text-gray-900">{selectedGroup.name}</h2>
+            </div>
             <div className="bg-indigo-50 rounded-lg p-3.5 flex items-center justify-between gap-3 mb-3">
               <div>
                 <p className="text-xs text-indigo-500 mb-1">Código de convite</p>

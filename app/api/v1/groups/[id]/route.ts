@@ -17,15 +17,18 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   }
 }
 
-const updateSchema = z.object({ name: z.string().min(1) });
+const updateSchema = z.object({
+  name: z.string().min(1).optional(),
+  photo_url: z.string().optional(),
+});
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
   const user = getUserFromRequest(req);
   if (!user) return unauthorized();
   try {
     const { id } = await params;
-    const { name } = updateSchema.parse(await req.json());
-    const group = await updateGroup(id, user.userId, name);
+    const body = updateSchema.parse(await req.json());
+    const group = await updateGroup(id, user.userId, { name: body.name, photoUrl: body.photo_url });
     return NextResponse.json(group);
   } catch (err: any) {
     if (err instanceof z.ZodError) return badRequest(JSON.stringify(err.issues));

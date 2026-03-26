@@ -11,7 +11,7 @@ const createSchema = z.object({
   birth_date: z.string().optional(),
   gender: z.string().optional(),
   weight_kg: z.number().positive().optional(),
-  photo_url: z.string().url().optional(),
+  photo_url: z.string().optional(),
   notes: z.string().optional(),
 });
 

@@ -14,6 +14,7 @@ interface Patient {
   birthDate?: string;
   weight_kg?: number;
   is_archived: boolean;
+  photoUrl?: string;
 }
 
 const GENDER_OPTIONS = ["Masculino", "Feminino", "Outro"];
@@ -257,13 +258,16 @@ export default function PatientsPage() {
                 href={`/patients/${p.id}`}
                 className="flex items-center gap-3.5 bg-white rounded-xl border border-gray-200 p-4 hover:border-indigo-300 hover:shadow-sm transition-all"
               >
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                  isHuman ? "bg-blue-100" : "bg-amber-100"
+                <div className={`w-10 h-10 rounded-full shrink-0 overflow-hidden flex items-center justify-center ${
+                  p.photoUrl ? "" : isHuman ? "bg-blue-100" : "bg-amber-100"
                 }`}>
-                  {isHuman
-                    ? <IconPerson className="w-5 h-5 text-blue-600" />
-                    : <IconPaw className="w-5 h-5 text-amber-600" />
-                  }
+                  {p.photoUrl ? (
+                    <img src={p.photoUrl} alt={p.name} className="w-full h-full object-cover" />
+                  ) : isHuman ? (
+                    <IconPerson className="w-5 h-5 text-blue-600" />
+                  ) : (
+                    <IconPaw className="w-5 h-5 text-amber-600" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 truncate">{p.name}</p>

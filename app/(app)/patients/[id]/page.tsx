@@ -1,9 +1,10 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/client/api";
-import { IconPaw, IconPerson, IconChevronLeft, IconPlus } from "@/app/components/icons";
+import { IconPaw, IconPerson, IconChevronLeft, IconPlus, IconCamera } from "@/app/components/icons";
 import { PageLoading } from "@/app/components/loading";
+import { PhotoCropModal } from "@/app/components/PhotoCropModal";
 
 interface Patient {
   id: string;
@@ -15,6 +16,7 @@ interface Patient {
   weightKg?: number;
   notes?: string;
   groupId: string;
+  photoUrl?: string;
 }
 
 interface Prescription {
@@ -55,6 +57,9 @@ export default function PatientDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isHuman = patient?.species === "Humano";
   const isEditHuman = form.species === "Humano";
@@ -103,11 +108,48 @@ export default function PatientDetailPage() {
     router.replace("/patients");
   }
 
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) setCropFile(file);
+    e.target.value = "";
+  }
+
+  async function handleCropConfirm(base64: string) {
+    setCropFile(null);
+    setUploadingPhoto(true);
+    try {
+      await api.patch(`/patients/${id}`, { photo_url: base64 });
+      const updated = await api.get<Patient>(`/patients/${id}`);
+      setPatient(updated);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
+
   if (loading) return <PageLoading />;
   if (!patient) return <div className="flex justify-center py-20 text-red-400 text-sm">Paciente não encontrado.</div>;
 
   return (
     <div className="space-y-5">
+      {cropFile && (
+        <PhotoCropModal
+          file={cropFile}
+          onConfirm={handleCropConfirm}
+          onCancel={() => setCropFile(null)}
+        />
+      )}
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileSelect}
+      />
+
       {/* Back + title */}
       <div className="flex items-center gap-3">
         <button
@@ -117,12 +159,33 @@ export default function PatientDetailPage() {
           <IconChevronLeft className="w-4 h-4" />
         </button>
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${isHuman ? "bg-blue-100" : "bg-amber-100"}`}>
-            {isHuman
-              ? <IconPerson className="w-5 h-5 text-blue-600" />
-              : <IconPaw className="w-5 h-5 text-amber-600" />
-            }
-          </div>
+          {/* Photo avatar with upload button */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingPhoto}
+            className="relative group shrink-0 w-11 h-11 rounded-full overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            title="Alterar foto"
+          >
+            {patient.photoUrl ? (
+              <img src={patient.photoUrl} alt={patient.name} className="w-full h-full object-cover" />
+            ) : (
+              <div className={`w-full h-full flex items-center justify-center ${isHuman ? "bg-blue-100" : "bg-amber-100"}`}>
+                {isHuman
+                  ? <IconPerson className="w-5 h-5 text-blue-600" />
+                  : <IconPaw className="w-5 h-5 text-amber-600" />
+                }
+              </div>
+            )}
+            {/* Hover overlay */}
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              {uploadingPhoto ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <IconCamera className="w-4 h-4 text-white" />
+              )}
+            </div>
+          </button>
           <div className="min-w-0">
             <h1 className="font-bold text-xl text-gray-900 leading-tight truncate">{patient.name}</h1>
             <p className="text-xs text-gray-400">{isHuman ? "Humano" : patient.species}</p>

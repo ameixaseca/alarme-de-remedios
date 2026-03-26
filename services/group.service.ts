@@ -46,9 +46,9 @@ export async function getGroupById(groupId: string, userId: string) {
   return group;
 }
 
-export async function updateGroup(groupId: string, userId: string, name: string) {
+export async function updateGroup(groupId: string, userId: string, data: { name?: string; photoUrl?: string }) {
   await assertAdmin(groupId, userId);
-  return prisma.group.update({ where: { id: groupId }, data: { name } });
+  return prisma.group.update({ where: { id: groupId }, data });
 }
 
 export async function joinGroup(userId: string, inviteCode: string) {
