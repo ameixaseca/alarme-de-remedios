@@ -13,6 +13,7 @@ const createSchema = z.object({
   frequency_hours: z.number().positive(),
   duration_days: z.number().int().positive().optional(),
   start_date: z.string().optional(),
+  start_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   schedule_times: z.array(z.string()).optional(),
 });
 
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
       frequencyHours: body.frequency_hours,
       durationDays: body.duration_days,
       startDate: body.start_date,
+      startTime: body.start_time,
       scheduleTimes: body.schedule_times,
     });
     return NextResponse.json(prescription, { status: 201 });

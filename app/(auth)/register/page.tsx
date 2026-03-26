@@ -24,7 +24,7 @@ export default function RegisterPage() {
       if (!res.ok) throw new Error(data.error || "Registration failed");
       localStorage.setItem("access_token", data.accessToken);
       localStorage.setItem("refresh_token", data.refreshToken);
-      router.replace("/");
+      router.replace("/onboarding");
     } catch (err: any) {
       setError(err.message);
     } finally {

@@ -47,6 +47,7 @@ export async function createPrescription(
     frequencyHours: number;
     durationDays?: number;
     startDate?: string;
+    startTime?: string;
     scheduleTimes?: string[];
   }
 ) {
@@ -62,7 +63,11 @@ export async function createPrescription(
   if (!medication || medication.groupId !== patient.groupId) throw new Error("Medication not found in group");
 
   const suggestedTimes = calcSuggestedTimes(data.frequencyHours);
-  const startDate = data.startDate ? new Date(data.startDate) : new Date();
+  const startDate = (() => {
+    const dateStr = data.startDate ?? new Date().toISOString().slice(0, 10);
+    const timeStr = data.startTime ?? "00:00";
+    return new Date(`${dateStr}T${timeStr}:00`);
+  })();
   const endDate =
     data.durationDays
       ? new Date(startDate.getTime() + data.durationDays * 24 * 60 * 60 * 1000)

@@ -24,7 +24,7 @@ export default function LoginPage() {
       if (!res.ok) throw new Error(data.error || "Login failed");
       localStorage.setItem("access_token", data.accessToken);
       localStorage.setItem("refresh_token", data.refreshToken);
-      router.replace("/");
+      router.replace("/home");
     } catch (err: any) {
       setError(err.message);
     } finally {

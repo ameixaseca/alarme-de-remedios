@@ -69,6 +69,7 @@ export default function NewPrescriptionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  const now = new Date();
   const [form, setForm] = useState({
     medicationId: "",
     fractionKey: "1",
@@ -76,7 +77,8 @@ export default function NewPrescriptionPage() {
     frequencyPreset: "24",
     customFrequency: "",
     durationDays: "",
-    startDate: new Date().toISOString().slice(0, 10),
+    startDate: now.toISOString().slice(0, 10),
+    startTime: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
   });
 
   const [scheduleTimes, setScheduleTimes] = useState<string[]>(["08:00"]);
@@ -156,6 +158,7 @@ export default function NewPrescriptionPage() {
         frequency_hours: frequencyHours,
         duration_days: form.durationDays ? parseInt(form.durationDays) : undefined,
         start_date: form.startDate,
+        start_time: form.startTime,
         schedule_times: scheduleTimes,
       });
       router.replace(`/patients/${id}`);
@@ -297,7 +300,7 @@ export default function NewPrescriptionPage() {
             )}
           </div>
 
-          {/* Duration and start date */}
+          {/* Duration and start date/time */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Duração (dias)</label>
@@ -317,6 +320,16 @@ export default function NewPrescriptionPage() {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
               />
             </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Hora de início</label>
+            <input
+              type="time" required
+              value={form.startTime}
+              onChange={(e) => setForm({ ...form, startTime: e.target.value })}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-gray-400 mt-1">Alertas só serão gerados a partir deste horário</p>
           </div>
         </div>
 

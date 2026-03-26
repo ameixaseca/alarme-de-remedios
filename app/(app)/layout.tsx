@@ -8,7 +8,7 @@ import {
 } from "@/app/components/icons";
 
 const navItems = [
-  { href: "/",            label: "Início",     Icon: IconHome },
+  { href: "/home",        label: "Início",     Icon: IconHome },
   { href: "/dashboard",   label: "Estoque",    Icon: IconPackage },
   { href: "/patients",    label: "Pacientes",  Icon: IconUsers },
   { href: "/medications", label: "Remédios",   Icon: IconPill },
@@ -19,17 +19,22 @@ const navItems = [
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const isLanding = pathname === "/";
+  const isFullScreen = pathname === "/" || pathname === "/onboarding";
 
   useEffect(() => {
+    if (isLanding) return;
     const token = localStorage.getItem("access_token");
     if (!token) router.replace("/login");
-  }, [router]);
+  }, [router, isLanding]);
 
   function handleLogout() {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     router.replace("/login");
   }
+
+  if (isFullScreen) return <>{children}</>;
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -42,6 +42,9 @@ export async function getPendingMedications(userId: string) {
       const scheduledAt = new Date(todayStart);
       scheduledAt.setHours(hours, minutes, 0, 0);
 
+      // Skip slots that are before the prescription's start date+time
+      if (scheduledAt < prescription.startDate) continue;
+
       // Check if this slot was registered: match by scheduledAt (exact, 1-min tolerance)
       // Fallback to 30-min window on appliedAt for legacy records without scheduledAt
       const applied = prescription.applications.some((app) => {

@@ -155,6 +155,8 @@ export function PhotoCropModal({ file, onConfirm, onCancel }: Props) {
                   top: offset.y,
                   width: imgRef.current ? imgRef.current.naturalWidth * scale : "auto",
                   height: imgRef.current ? imgRef.current.naturalHeight * scale : "auto",
+                  maxWidth: "none",
+                  maxHeight: "none",
                   userSelect: "none",
                   pointerEvents: "none",
                 }}
