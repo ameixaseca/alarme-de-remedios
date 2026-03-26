@@ -7,13 +7,12 @@ interface PendingItem {
   prescription: { id: string };
   medication: { id: string; name: string; dose_unit: string };
   scheduled_at: string;
-  status: "overdue" | "upcoming" | "applied";
+  status: "overdue" | "upcoming";
   dose_quantity: number;
   dose_fraction?: string;
   dose_unit: string;
   applied: boolean;
   minutes_overdue?: number;
-  applied_at?: string;
 }
 
 interface ApplyModalProps {
@@ -97,12 +96,10 @@ function formatTime(iso: string) {
 
 function PendingCard({ item, onApply }: { item: PendingItem; onApply: () => void }) {
   const isOverdue = item.status === "overdue";
-  const isApplied = item.status === "applied";
-  const isUpcoming = item.status === "upcoming";
 
-  const borderColor = isOverdue ? "border-red-300" : isApplied ? "border-green-300" : "border-yellow-300";
-  const bgColor = isOverdue ? "bg-red-50" : isApplied ? "bg-green-50" : "bg-yellow-50";
-  const badge = isOverdue ? "🔴 ATRASADA" : isApplied ? "✅ APLICADA" : "🟡 PENDENTE";
+  const borderColor = isOverdue ? "border-red-300" : "border-yellow-300";
+  const bgColor = isOverdue ? "bg-red-50" : "bg-yellow-50";
+  const badge = isOverdue ? "🔴 ATRASADA" : "🟡 PENDENTE";
 
   return (
     <div className={`rounded-xl border-2 ${borderColor} ${bgColor} p-4`}>
@@ -116,16 +113,13 @@ function PendingCard({ item, onApply }: { item: PendingItem; onApply: () => void
       <p className="text-xs text-gray-500 mt-1">
         Prevista às {formatTime(item.scheduled_at)}
         {isOverdue && item.minutes_overdue && ` · ${Math.floor(item.minutes_overdue / 60)}h ${item.minutes_overdue % 60}min atrás`}
-        {isApplied && item.applied_at && ` · Aplicada às ${formatTime(item.applied_at)}`}
       </p>
-      {!isApplied && (
-        <button
-          onClick={onApply}
-          className="mt-3 w-full bg-indigo-600 text-white text-sm font-semibold py-2 rounded-lg hover:bg-indigo-700"
-        >
-          Registrar Aplicação
-        </button>
-      )}
+      <button
+        onClick={onApply}
+        className="mt-3 w-full bg-indigo-600 text-white text-sm font-semibold py-2 rounded-lg hover:bg-indigo-700"
+      >
+        Registrar Aplicação
+      </button>
     </div>
   );
 }
@@ -191,7 +185,16 @@ export default function HomePage() {
         <ApplyModal
           item={applyItem}
           onClose={() => setApplyItem(null)}
-          onSuccess={() => { setApplyItem(null); fetchData(); }}
+          onSuccess={() => {
+          const applied = applyItem;
+          setApplyItem(null);
+          // Optimistically remove the item while refetch runs
+          setData((prev) => prev
+            ? { ...prev, items: prev.items.filter((i) => i !== applied) }
+            : prev
+          );
+          fetchData();
+        }}
         />
       )}
     </div>

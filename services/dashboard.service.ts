@@ -42,29 +42,17 @@ export async function getPendingMedications(userId: string) {
       const scheduledAt = new Date(todayStart);
       scheduledAt.setHours(hours, minutes, 0, 0);
 
-      // Check if applied within 15-min window
+      // Check if this slot was registered: match by scheduledAt (exact, 1-min tolerance)
+      // Fallback to 30-min window on appliedAt for legacy records without scheduledAt
       const applied = prescription.applications.some((app) => {
-        const diff = Math.abs(app.appliedAt.getTime() - scheduledAt.getTime());
-        return diff <= 30 * 60 * 1000; // 30 min window
+        if (app.scheduledAt) {
+          return Math.abs(app.scheduledAt.getTime() - scheduledAt.getTime()) <= 60 * 1000;
+        }
+        return Math.abs(app.appliedAt.getTime() - scheduledAt.getTime()) <= 30 * 60 * 1000;
       });
 
       if (applied) {
-        const app = prescription.applications.find((a) => {
-          const diff = Math.abs(a.appliedAt.getTime() - scheduledAt.getTime());
-          return diff <= 30 * 60 * 1000;
-        });
-        items.push({
-          patient: prescription.patient,
-          prescription: { id: prescription.id },
-          medication: prescription.medication,
-          scheduled_at: scheduledAt.toISOString(),
-          status: "applied",
-          dose_quantity: prescription.doseQuantity,
-          dose_fraction: prescription.doseFraction,
-          dose_unit: prescription.doseUnit,
-          applied: true,
-          applied_at: app?.appliedAt.toISOString(),
-        });
+        continue; // already registered — exclude from pending list
       } else {
         const overdueThreshold = new Date(scheduledAt.getTime() + OVERDUE_TOLERANCE_MINUTES * 60 * 1000);
         const isOverdue = now > overdueThreshold;
@@ -86,9 +74,9 @@ export async function getPendingMedications(userId: string) {
     }
   }
 
-  // Sort: overdue (oldest first), then upcoming (soonest first), then applied
+  // Sort: overdue (oldest first), then upcoming (soonest first)
   items.sort((a: any, b: any) => {
-    const order = { overdue: 0, upcoming: 1, applied: 2 };
+    const order = { overdue: 0, upcoming: 1 };
     if (order[a.status as keyof typeof order] !== order[b.status as keyof typeof order]) {
       return order[a.status as keyof typeof order] - order[b.status as keyof typeof order];
     }
