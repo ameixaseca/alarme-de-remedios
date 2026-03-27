@@ -204,8 +204,12 @@ function OfflineBanner() {
 function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const isLanding   = pathname === "/";
+  const isLanding    = pathname === "/";
   const isFullScreen = pathname === "/" || pathname === "/onboarding";
+  const [openMobileGroup, setOpenMobileGroup] = useState<string | null>(null);
+
+  // Close sub-menu whenever the route changes
+  useEffect(() => { setOpenMobileGroup(null); }, [pathname]);
 
   useEffect(() => {
     if (isLanding) return;
@@ -301,21 +305,59 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* ── Mobile bottom navigation ────────────────────────── */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 pb-safe">
-        <div className="flex">
-          {navItems.map(({ href, label, Icon }) => {
-            const active = pathname === href;
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40">
+        {/* Sub-menu sheet */}
+        {openMobileGroup && (
+          <>
+            <div className="fixed inset-0 z-30" onClick={() => setOpenMobileGroup(null)} />
+            <div className="absolute bottom-full inset-x-0 bg-white border-t border-gray-200 shadow-lg z-40">
+              {(mobileNavItems.find((i) => "children" in i && i.key === openMobileGroup) as MobileNavGroup | undefined)
+                ?.children.map(({ href, label, Icon }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={`flex items-center gap-3 px-5 py-3.5 text-sm font-medium transition-colors ${
+                      pathname === href ? "text-indigo-600 bg-indigo-50" : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <Icon className="w-5 h-5 shrink-0" />
+                    {label}
+                  </Link>
+                ))}
+            </div>
+          </>
+        )}
+
+        <div className="flex bg-white border-t border-gray-200 pb-safe">
+          {mobileNavItems.map((item) => {
+            if ("href" in item) {
+              const active = pathname === item.href;
+              return (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  className={`flex-1 flex flex-col items-center gap-0.5 pt-2 pb-2.5 transition-colors ${
+                    active ? "text-indigo-600" : "text-gray-400 hover:text-gray-600"
+                  }`}
+                >
+                  <item.Icon className="w-5 h-5" />
+                  <span className="text-[10px] font-medium leading-tight">{item.label}</span>
+                </Link>
+              );
+            }
+            const isChildActive = item.children.some((c) => pathname === c.href);
+            const isOpen = openMobileGroup === item.key;
             return (
-              <Link
-                key={href}
-                href={href}
+              <button
+                key={item.key}
+                onClick={() => setOpenMobileGroup(isOpen ? null : item.key)}
                 className={`flex-1 flex flex-col items-center gap-0.5 pt-2 pb-2.5 transition-colors ${
-                  active ? "text-indigo-600" : "text-gray-400 hover:text-gray-600"
+                  isChildActive || isOpen ? "text-indigo-600" : "text-gray-400 hover:text-gray-600"
                 }`}
               >
-                <Icon className="w-5 h-5" />
-                <span className="text-[10px] font-medium leading-tight">{label}</span>
-              </Link>
+                <item.Icon className="w-5 h-5" />
+                <span className="text-[10px] font-medium leading-tight">{item.label}</span>
+              </button>
             );
           })}
         </div>
