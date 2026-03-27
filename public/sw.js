@@ -87,8 +87,8 @@ async function handleApplicationPost(request) {
     });
     return response;
   } catch {
-    // Network unavailable — persist to IndexedDB
-    await enqueue({ payload: body, auth });
+    // Network unavailable — persist to IndexedDB (mark as offline_sync for server-side notification)
+    await enqueue({ payload: { ...body, offline_sync: true }, auth });
     await notifyQueueChange();
     return new Response(JSON.stringify({ queued: true }), {
       status: 202,
@@ -232,6 +232,34 @@ self.addEventListener("sync", (event) => {
   if (event.tag === SYNC_TAG) {
     event.waitUntil(flushQueue());
   }
+});
+
+// ── Push notifications ────────────────────────────────────
+self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data?.json() ?? {}; } catch {}
+
+  const title   = data.title ?? "DailyMed";
+  const options = {
+    body:  data.body ?? "",
+    icon:  "/icon-192.png",
+    badge: "/icon-192.png",
+    data:  data.data ?? {},
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window" }).then((clients) => {
+      const focused = clients.find((c) => c.focused);
+      if (focused) return focused.focus();
+      if (clients.length > 0) return clients[0].focus();
+      return self.clients.openWindow("/home");
+    })
+  );
 });
 
 // ── Message handler ───────────────────────────────────────

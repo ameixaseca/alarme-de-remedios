@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import { notifyGroupMembers } from "@/services/notification.service";
+
+const LOW_STOCK_DAYS = 7;
 
 async function assertApplicationAccess(applicationId: string, userId: string) {
   const app = await prisma.application.findUnique({
@@ -201,6 +204,7 @@ export async function createApplication(
       data:  { stockQuantity: { decrement: stockDecrement } },
     });
     stockRemaining = updated.stockQuantity;
+    await maybeNotifyLowStock(prescription.medication, stockRemaining, prescription.patient.groupId);
   }
 
   return { application, stockRemaining };
@@ -254,9 +258,49 @@ export async function createAdHocApplication(
       data:  { stockQuantity: { decrement: stockDecrement } },
     });
     stockRemaining = updated.stockQuantity;
+    await maybeNotifyLowStock(medication, stockRemaining, patient.groupId);
   }
 
   return { application, stockRemaining };
+}
+
+// ── Helpers ───────────────────────────────────────────────
+
+async function maybeNotifyLowStock(
+  medication: { id: string; name: string; doseUnit: string },
+  stockRemaining: number | null,
+  groupId: string
+) {
+  if (stockRemaining === null) return;
+
+  // Compute daily consumption for this medication
+  const activePrescriptions = await prisma.prescription.findMany({
+    where: { medicationId: medication.id, status: "active" },
+    select: { frequencyHours: true, doseQuantity: true },
+  });
+  if (activePrescriptions.length === 0) return;
+
+  const isDrops = medication.doseUnit.toLowerCase().trim() === "gotas";
+  const dailyConsumption = activePrescriptions.reduce((sum, p) => {
+    const dosesPerDay = 24 / p.frequencyHours;
+    return sum + dosesPerDay * (isDrops ? p.doseQuantity * 0.05 : p.doseQuantity);
+  }, 0);
+  if (dailyConsumption <= 0) return;
+
+  const daysRemaining = stockRemaining / dailyConsumption;
+  if (daysRemaining >= LOW_STOCK_DAYS) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  await notifyGroupMembers(
+    groupId,
+    "LOW_STOCK",
+    "Estoque baixo",
+    `${medication.name} tem estoque para aprox. ${Math.ceil(daysRemaining)} dia(s)`,
+    {
+      data: { medicationId: medication.id, daysRemaining: Math.ceil(daysRemaining) },
+      dedupKey: `low_stock_${medication.id}_${today}`,
+    }
+  );
 }
 
 export async function getApplication(applicationId: string, userId: string) {

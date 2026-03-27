@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { calcSuggestedTimes } from "@/lib/schedule";
 import { PrescriptionStatus } from "@prisma/client";
+import { notifyGroupMembers } from "@/services/notification.service";
 
 async function assertPrescriptionAccess(prescriptionId: string, userId: string) {
   const prescription = await prisma.prescription.findUnique({
@@ -182,6 +183,15 @@ export async function deletePrescription(prescriptionId: string, userId: string)
       performedBy: userId,
     },
   });
+
+  // Notify all group members
+  await notifyGroupMembers(
+    prescription.patient.groupId,
+    "PRESCRIPTION_REMOVED",
+    "Prescrição removida",
+    `Prescrição de ${prescription.medication.name} para ${prescription.patient.name} foi removida`,
+    { data: { patientId: prescription.patientId, medicationId: prescription.medicationId } }
+  );
 }
 
 export async function listPrescriptionLogs(

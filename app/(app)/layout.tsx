@@ -1,12 +1,13 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   IconHome, IconPackage, IconUsers, IconPill,
-  IconGroup, IconClipboard, IconLogOut, IconChevronDown,
+  IconGroup, IconClipboard, IconLogOut, IconChevronDown, IconBell,
 } from "@/app/components/icons";
 import { GroupProvider, useGroupContext, type Group } from "@/app/contexts/group-context";
+import { api } from "@/lib/client/api";
 
 const navItems = [
   { href: "/home",        label: "Início",     Icon: IconHome },
@@ -200,6 +201,151 @@ function OfflineBanner() {
   );
 }
 
+/* ─── Notification bell ─────────────────────────────────── */
+interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  read: boolean;
+  createdAt: string;
+}
+
+function NotificationBell() {
+  const [open, setOpen]               = useState(false);
+  const [items, setItems]             = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loading, setLoading]         = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const fetchNotifications = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api.get<{ items: NotificationItem[]; unreadCount: number }>(
+        "/notifications"
+      );
+      setItems(data.items);
+      setUnreadCount(data.unreadCount);
+    } catch {
+      // silently ignore
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Poll unread count every 60 s
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 60_000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  async function handleOpen() {
+    setOpen((o) => !o);
+    if (!open) await fetchNotifications();
+  }
+
+  async function markAllRead() {
+    await api.patch("/notifications", {});
+    setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+    setUnreadCount(0);
+  }
+
+  async function markRead(id: string) {
+    await api.patch(`/notifications/${id}`, {});
+    setItems((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+    setUnreadCount((c) => Math.max(0, c - 1));
+  }
+
+  const badgeLabel = unreadCount > 9 ? "9+" : String(unreadCount);
+
+  const typeIcon: Record<string, string> = {
+    LATE_APPLICATION:     "⏰",
+    LOW_STOCK:            "📦",
+    PRESCRIPTION_REMOVED: "🗑",
+    OFFLINE_APPLICATION:  "📶",
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={handleOpen}
+        className="relative p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+        aria-label="Notificações"
+      >
+        <IconBell className="w-5 h-5" />
+        {unreadCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+            {badgeLabel}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-900 text-sm">Notificações</h3>
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllRead}
+                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+              >
+                Marcar todas como lidas
+              </button>
+            )}
+          </div>
+
+          {/* List */}
+          <div className="max-h-96 overflow-y-auto divide-y divide-gray-50">
+            {loading && items.length === 0 && (
+              <div className="py-8 text-center text-sm text-gray-400">Carregando…</div>
+            )}
+            {!loading && items.length === 0 && (
+              <div className="py-10 text-center">
+                <IconBell className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+                <p className="text-sm text-gray-400">Nenhuma notificação</p>
+              </div>
+            )}
+            {items.map((n) => (
+              <button
+                key={n.id}
+                onClick={() => !n.read && markRead(n.id)}
+                className={`w-full text-left flex gap-3 px-4 py-3 transition-colors hover:bg-gray-50 ${
+                  n.read ? "opacity-60" : "bg-indigo-50/40"
+                }`}
+              >
+                <span className="text-lg shrink-0 mt-0.5">{typeIcon[n.type] ?? "🔔"}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-gray-800 truncate">{n.title}</p>
+                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.body}</p>
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    {new Date(n.createdAt).toLocaleString("pt-BR", {
+                      day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+                    })}
+                  </p>
+                </div>
+                {!n.read && (
+                  <span className="w-2 h-2 bg-indigo-500 rounded-full shrink-0 mt-1.5" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Inner layout (uses context) ───────────────────────── */
 function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -265,8 +411,12 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* Logout */}
-        <div className="px-3 pb-5 shrink-0">
+        {/* Notifications + Logout */}
+        <div className="px-3 pb-5 shrink-0 space-y-1">
+          <div className="flex items-center gap-3 px-3 py-2.5">
+            <NotificationBell />
+            <span className="text-sm font-medium text-gray-600">Notificações</span>
+          </div>
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 px-3 py-2.5 w-full rounded-lg text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors"
@@ -287,13 +437,16 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           <span className="text-gray-300">|</span>
           <GroupSwitcher compact />
         </div>
-        <button
-          onClick={handleLogout}
-          className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-          aria-label="Sair"
-        >
-          <IconLogOut className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <NotificationBell />
+          <button
+            onClick={handleLogout}
+            className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            aria-label="Sair"
+          >
+            <IconLogOut className="w-5 h-5" />
+          </button>
+        </div>
       </header>
 
       {/* ── Main content ────────────────────────────────────── */}

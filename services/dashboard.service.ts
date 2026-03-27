@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { notifyGroupMembers } from "@/services/notification.service";
 
 const OVERDUE_TOLERANCE_MINUTES = 15;
 const LOW_STOCK_DAYS = 7;
@@ -35,7 +36,7 @@ export async function getPendingMedications(userId: string, tzOffset: number = 0
       OR: [{ endDate: null }, { endDate: { gte: todayStart } }],
     },
     include: {
-      patient: { select: { id: true, name: true, species: true, photoUrl: true } },
+      patient: { select: { id: true, name: true, species: true, photoUrl: true, groupId: true } },
       medication: { select: { id: true, name: true, doseUnit: true } },
       applications: {
         where: { appliedAt: { gte: todayStart, lte: todayEnd } },
@@ -70,6 +71,25 @@ export async function getPendingMedications(userId: string, tzOffset: number = 0
         const overdueThreshold = new Date(scheduledAt.getTime() + OVERDUE_TOLERANCE_MINUTES * 60 * 1000);
         const isOverdue = now > overdueThreshold;
         const minutesOverdue = isOverdue ? Math.floor((now.getTime() - scheduledAt.getTime()) / 60000) : 0;
+
+        if (isOverdue) {
+          // Fire-and-forget: notify group members about the late application (deduped per hour)
+          const schedHour = scheduledAt.toISOString().slice(0, 13);
+          notifyGroupMembers(
+            prescription.patient.groupId,
+            "LATE_APPLICATION",
+            "Medicamento atrasado",
+            `${prescription.medication.name} para ${prescription.patient.name} está atrasado (${minutesOverdue} min)`,
+            {
+              data: {
+                prescriptionId: prescription.id,
+                patientId: prescription.patient.id,
+                medicationId: prescription.medication.id,
+              },
+              dedupKey: `late_application_${prescription.id}_${schedHour}`,
+            }
+          ).catch(() => {});
+        }
 
         items.push({
           patient: { ...prescription.patient, photo_url: prescription.patient.photoUrl },

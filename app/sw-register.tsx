@@ -1,13 +1,52 @@
 "use client";
 import { useEffect } from "react";
+import { api } from "@/lib/client/api";
 
 const SYNC_TAG = "sync-applications";
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
+async function registerPushSubscription(reg: ServiceWorkerRegistration) {
+  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  if (!vapidKey) return;
+
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") return;
+
+    const existing = await reg.pushManager.getSubscription();
+    const sub = existing ?? await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey),
+    });
+
+    await api.post("/notifications/push-subscription", {
+      endpoint: sub.endpoint,
+      p256dh:   btoa(String.fromCharCode(...new Uint8Array(sub.getKey("p256dh")!))),
+      auth:     btoa(String.fromCharCode(...new Uint8Array(sub.getKey("auth")!))),
+    });
+  } catch {
+    // Push not supported or user denied — silently ignore
+  }
+}
 
 export default function ServiceWorkerRegistrar() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
-    navigator.serviceWorker.register("/sw.js").catch(console.error);
+    navigator.serviceWorker.register("/sw.js").then((reg) => {
+      // Register push subscription after SW is ready
+      navigator.serviceWorker.ready.then((activeReg) => {
+        registerPushSubscription(activeReg);
+        activeReg.active?.postMessage({ type: "GET_QUEUE_COUNT" });
+      });
+      return reg;
+    }).catch(console.error);
 
     // Relay SW messages as window CustomEvents so any component can listen
     const handleMessage = (event: MessageEvent) => {
@@ -21,11 +60,6 @@ export default function ServiceWorkerRegistrar() {
     };
 
     navigator.serviceWorker.addEventListener("message", handleMessage);
-
-    // Ask SW for current queue count so the banner can initialise correctly
-    navigator.serviceWorker.ready.then((reg) => {
-      reg.active?.postMessage({ type: "GET_QUEUE_COUNT" });
-    });
 
     // When connectivity is restored, trigger a background sync
     const handleOnline = () => {
