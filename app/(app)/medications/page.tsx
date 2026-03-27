@@ -1,9 +1,10 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { api } from "@/lib/client/api";
 import { IconPill, IconChevronRight, IconPlus, IconX, IconCamera } from "@/app/components/icons";
 import { PageLoading } from "@/app/components/loading";
+import { useGroupContext } from "@/app/contexts/group-context";
 
 interface Medication {
   id: string;
@@ -44,12 +45,12 @@ function resizeImage(file: File, maxPx: number): Promise<string> {
 }
 
 export default function MedicationsPage() {
+  const { activeGroup } = useGroupContext();
   const [medications, setMedications] = useState<Medication[]>([]);
-  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
-    group_id: "", name: "", manufacturer: "", active_ingredient: "",
+    name: "", manufacturer: "", active_ingredient: "",
     application_method: "oral", dose_unit: "", dose_unit_custom: false, stock_quantity: "",
   });
   const [error, setError] = useState("");
@@ -57,23 +58,20 @@ export default function MedicationsPage() {
   const [identifyMsg, setIdentifyMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
-  async function fetchAll() {
+  const fetchMedications = useCallback(async (groupId: string) => {
+    setLoading(true);
     try {
-      const [mData, gData] = await Promise.all([
-        api.get<{ medications: Medication[] }>("/medications"),
-        api.get<{ groups: { id: string; name: string }[] }>("/groups"),
-      ]);
-      setMedications(mData.medications);
-      setGroups(gData.groups);
-      if (gData.groups.length > 0 && !form.group_id) {
-        setForm((f) => ({ ...f, group_id: gData.groups[0].id }));
-      }
+      const { medications: meds } = await api.get<{ medications: Medication[] }>(`/medications?group_id=${groupId}`);
+      setMedications(meds);
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    if (!activeGroup) return;
+    fetchMedications(activeGroup.id);
+  }, [activeGroup, fetchMedications]);
 
   async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -117,10 +115,11 @@ export default function MedicationsPage() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (!activeGroup) return;
     setError("");
     try {
       await api.post("/medications", {
-        group_id: form.group_id,
+        group_id: activeGroup.id,
         name: form.name,
         manufacturer: form.manufacturer || undefined,
         active_ingredient: form.active_ingredient || undefined,
@@ -130,7 +129,7 @@ export default function MedicationsPage() {
       });
       setShowForm(false);
       setForm((f) => ({ ...f, name: "", manufacturer: "", active_ingredient: "", dose_unit: "", dose_unit_custom: false, stock_quantity: "" }));
-      fetchAll();
+      fetchMedications(activeGroup.id);
     } catch (err: any) {
       setError(err.message);
     }
@@ -142,7 +141,10 @@ export default function MedicationsPage() {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="font-bold text-xl text-gray-900">Medicamentos</h1>
+        <div>
+          <h1 className="font-bold text-xl text-gray-900">Medicamentos</h1>
+          {activeGroup && <p className="text-sm text-gray-400 mt-0.5">{activeGroup.name}</p>}
+        </div>
         <button
           onClick={() => { setShowForm(!showForm); setIdentifyMsg(null); setError(""); }}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors ${
@@ -202,16 +204,11 @@ export default function MedicationsPage() {
             </div>
           )}
           <form onSubmit={handleCreate} className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Grupo</label>
-              <select
-                className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                value={form.group_id}
-                onChange={(e) => setForm({ ...form, group_id: e.target.value })}
-              >
-                {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-              </select>
-            </div>
+            {activeGroup && (
+              <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+                Será adicionado ao grupo: <span className="font-semibold text-gray-700">{activeGroup.name}</span>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">Nome *</label>

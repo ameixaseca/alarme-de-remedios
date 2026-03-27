@@ -16,6 +16,7 @@ interface Patient {
   id: string;
   name: string;
   species: string;
+  groupId: string;
 }
 
 const FRACTION_OPTIONS = [
@@ -84,13 +85,13 @@ export default function NewPrescriptionPage() {
   const [scheduleTimes, setScheduleTimes] = useState<string[]>(["08:00"]);
 
   useEffect(() => {
-    Promise.all([
-      api.get<Patient>(`/patients/${id}`),
-      api.get<{ medications: Medication[] }>("/medications"),
-    ]).then(([p, { medications: meds }]) => {
-      setPatient(p);
-      setMedications(meds);
-    }).finally(() => setLoading(false));
+    api.get<Patient>(`/patients/${id}`)
+      .then((p) => {
+        setPatient(p);
+        return api.get<{ medications: Medication[] }>(`/medications?group_id=${p.groupId}`);
+      })
+      .then(({ medications: meds }) => setMedications(meds))
+      .finally(() => setLoading(false));
   }, [id]);
 
   const frequencyHours = useMemo(() => {

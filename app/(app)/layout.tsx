@@ -1,11 +1,130 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   IconHome, IconPackage, IconUsers, IconPill,
-  IconGroup, IconClipboard, IconLogOut,
+  IconGroup, IconClipboard, IconLogOut, IconChevronDown,
 } from "@/app/components/icons";
+import { GroupProvider, useGroupContext, type Group } from "@/app/contexts/group-context";
+
+const navItems = [
+  { href: "/home",        label: "Início",     Icon: IconHome },
+  { href: "/dashboard",   label: "Estoque",    Icon: IconPackage },
+  { href: "/patients",    label: "Pacientes",  Icon: IconUsers },
+  { href: "/medications", label: "Remédios",   Icon: IconPill },
+  { href: "/group",       label: "Grupo",      Icon: IconGroup },
+  { href: "/log",         label: "Log",        Icon: IconClipboard },
+];
+
+type MobileNavChild = { href: string; label: string; Icon: React.FC<{ className?: string }> };
+type MobileNavLink  = { key: string; label: string; Icon: React.FC<{ className?: string }>; href: string };
+type MobileNavGroup = { key: string; label: string; Icon: React.FC<{ className?: string }>; children: MobileNavChild[] };
+type MobileNavItem  = MobileNavLink | MobileNavGroup;
+
+const mobileNavItems: MobileNavItem[] = [
+  { key: "inicio",        label: "Início",       Icon: IconHome,      href: "/home" },
+  { key: "pessoas",       label: "Pessoas",      Icon: IconUsers,     children: [
+      { href: "/patients", label: "Pacientes", Icon: IconUsers },
+      { href: "/group",    label: "Grupo",     Icon: IconGroup },
+  ]},
+  { key: "medicamentos",  label: "Medicamentos", Icon: IconPill,      children: [
+      { href: "/medications", label: "Remédios", Icon: IconPill },
+      { href: "/dashboard",   label: "Estoque",  Icon: IconPackage },
+      { href: "/log",         label: "Log",      Icon: IconClipboard },
+  ]},
+];
+
+/* ─── Group switcher ────────────────────────────────────── */
+function GroupSwitcher({ compact }: { compact?: boolean }) {
+  const { groups, activeGroup, setActiveGroup } = useGroupContext();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  if (!activeGroup) return null;
+
+  const hasMany = groups.length > 1;
+
+  function GroupInitial({ name }: { name: string }) {
+    return (
+      <span className="w-6 h-6 rounded-md bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center shrink-0">
+        {name.charAt(0).toUpperCase()}
+      </span>
+    );
+  }
+
+  if (compact) {
+    // Mobile header version — tighter
+    return (
+      <div ref={ref} className="relative">
+        <button
+          onClick={() => hasMany && setOpen((o) => !o)}
+          className={`flex items-center gap-1.5 max-w-[130px] ${hasMany ? "cursor-pointer" : "cursor-default"}`}
+        >
+          <GroupInitial name={activeGroup.name} />
+          <span className="text-xs font-semibold text-gray-700 truncate">{activeGroup.name}</span>
+          {hasMany && <IconChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
+        </button>
+        {open && (
+          <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-50">
+            {groups.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => { setActiveGroup(g); setOpen(false); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors ${
+                  g.id === activeGroup.id ? "bg-indigo-50 text-indigo-700 font-medium" : "text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                <GroupInitial name={g.name} />
+                <span className="truncate">{g.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Desktop sidebar version
+  return (
+    <div ref={ref} className="relative px-3 pb-3">
+      <button
+        onClick={() => hasMany && setOpen((o) => !o)}
+        className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 text-left transition-colors ${
+          hasMany ? "hover:bg-gray-100 cursor-pointer" : "cursor-default"
+        }`}
+      >
+        <GroupInitial name={activeGroup.name} />
+        <span className="flex-1 text-sm font-medium text-gray-800 truncate">{activeGroup.name}</span>
+        {hasMany && <IconChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
+      </button>
+      {open && (
+        <div className="absolute top-full left-3 right-3 mt-1 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-50">
+          {groups.map((g) => (
+            <button
+              key={g.id}
+              onClick={() => { setActiveGroup(g); setOpen(false); }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors ${
+                g.id === activeGroup.id ? "bg-indigo-50 text-indigo-700 font-medium" : "text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              <GroupInitial name={g.name} />
+              <span className="truncate">{g.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ─── Offline banner ────────────────────────────────────── */
 function OfflineBanner() {
@@ -81,19 +200,11 @@ function OfflineBanner() {
   );
 }
 
-const navItems = [
-  { href: "/home",        label: "Início",     Icon: IconHome },
-  { href: "/dashboard",   label: "Estoque",    Icon: IconPackage },
-  { href: "/patients",    label: "Pacientes",  Icon: IconUsers },
-  { href: "/medications", label: "Remédios",   Icon: IconPill },
-  { href: "/group",       label: "Grupo",      Icon: IconGroup },
-  { href: "/log",         label: "Log",        Icon: IconClipboard },
-];
-
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+/* ─── Inner layout (uses context) ───────────────────────── */
+function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const isLanding = pathname === "/";
+  const isLanding   = pathname === "/";
   const isFullScreen = pathname === "/" || pathname === "/onboarding";
 
   useEffect(() => {
@@ -105,6 +216,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   function handleLogout() {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
+    localStorage.removeItem("activeGroupId");
     router.replace("/login");
   }
 
@@ -122,8 +234,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <span className="font-bold text-gray-900 text-base tracking-tight">DailyMed</span>
         </div>
 
+        {/* Group switcher */}
+        <div className="pt-3">
+          <p className="px-5 text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">Grupo ativo</p>
+          <GroupSwitcher />
+        </div>
+
         {/* Nav links */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
           {navItems.map(({ href, label, Icon }) => {
             const active = pathname === href;
             return (
@@ -157,11 +275,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* ── Mobile top header ───────────────────────────────── */}
       <header className="lg:hidden fixed top-0 inset-x-0 z-40 h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-indigo-600 rounded-md flex items-center justify-center">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 bg-indigo-600 rounded-md flex items-center justify-center shrink-0">
             <IconPill className="w-4 h-4 text-white" />
           </div>
-          <span className="font-bold text-gray-900">DailyMed</span>
+          <span className="font-bold text-gray-900 text-sm">DailyMed</span>
+          <span className="text-gray-300">|</span>
+          <GroupSwitcher compact />
         </div>
         <button
           onClick={handleLogout}
@@ -173,10 +293,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* ── Main content ────────────────────────────────────── */}
-      {/*
-        Mobile:  pt-14 (header height) + pb-20 (bottom nav height)
-        Desktop: ml-60 (sidebar width), no extra padding
-      */}
       <main className="lg:ml-60 pt-14 lg:pt-0 pb-20 lg:pb-0">
         <OfflineBanner />
         <div className="max-w-3xl mx-auto px-4 py-6 lg:px-8 lg:py-8 lg:max-w-4xl">
@@ -205,5 +321,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
     </div>
+  );
+}
+
+/* ─── Root export ───────────────────────────────────────── */
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <GroupProvider>
+      <AppLayoutInner>{children}</AppLayoutInner>
+    </GroupProvider>
   );
 }

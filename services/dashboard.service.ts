@@ -3,14 +3,18 @@ import { prisma } from "@/lib/prisma";
 const OVERDUE_TOLERANCE_MINUTES = 15;
 const LOW_STOCK_DAYS = 7;
 
-export async function getPendingMedications(userId: string, tzOffset: number = 0) {
+export async function getPendingMedications(userId: string, tzOffset: number = 0, groupId?: string) {
   // tzOffset: minutes from UTC, e.g. -180 for UTC-3 (Brazil).
   // getTimezoneOffset() on the client returns the negated value, so the caller should negate it.
   const memberGroups = await prisma.groupMember.findMany({
     where: { userId },
     select: { groupId: true },
   });
-  const groupIds = memberGroups.map((m) => m.groupId);
+  const allGroupIds = memberGroups.map((m) => m.groupId);
+  // If a specific group is requested, filter to it (and verify membership)
+  const groupIds = groupId
+    ? allGroupIds.filter((id) => id === groupId)
+    : allGroupIds;
 
   const now = new Date();
   const offsetMs = tzOffset * 60 * 1000;
@@ -99,12 +103,15 @@ export async function getPendingMedications(userId: string, tzOffset: number = 0
   };
 }
 
-export async function getStockDashboard(userId: string) {
+export async function getStockDashboard(userId: string, groupId?: string) {
   const memberGroups = await prisma.groupMember.findMany({
     where: { userId },
     select: { groupId: true },
   });
-  const groupIds = memberGroups.map((m) => m.groupId);
+  const allGroupIds = memberGroups.map((m) => m.groupId);
+  const groupIds = groupId
+    ? allGroupIds.filter((id) => id === groupId)
+    : allGroupIds;
 
   const medications = await prisma.medication.findMany({
     where: { groupId: { in: groupIds } },

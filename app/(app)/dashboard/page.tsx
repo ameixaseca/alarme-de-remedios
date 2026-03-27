@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/client/api";
 import { IconAlertTriangle, IconPackage } from "@/app/components/icons";
 import { PageLoading } from "@/app/components/loading";
+import { useGroupContext } from "@/app/contexts/group-context";
 
 interface StockItem {
   id: string;
@@ -17,14 +18,17 @@ interface StockItem {
 }
 
 export default function DashboardPage() {
+  const { activeGroup } = useGroupContext();
   const [data, setData] = useState<{ medications: StockItem[] } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get<{ medications: StockItem[] }>("/dashboard/stock")
+    if (!activeGroup) return;
+    setLoading(true);
+    api.get<{ medications: StockItem[] }>(`/dashboard/stock?group_id=${activeGroup.id}`)
       .then(setData)
       .finally(() => setLoading(false));
-  }, []);
+  }, [activeGroup]);
 
   if (loading) return <PageLoading />;
 
@@ -33,7 +37,10 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="font-bold text-xl text-gray-900">Estoque</h1>
+      <div>
+        <h1 className="font-bold text-xl text-gray-900">Estoque</h1>
+        {activeGroup && <p className="text-sm text-gray-400 mt-0.5">{activeGroup.name}</p>}
+      </div>
 
       {/* Alert section */}
       {alertMeds.length > 0 && (

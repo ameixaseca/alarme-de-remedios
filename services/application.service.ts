@@ -63,13 +63,17 @@ export async function listApplicationLog(
     to?: string;
     take?: number;
     skip?: number;
+    groupId?: string;
   } = {}
 ) {
   const memberGroups = await prisma.groupMember.findMany({
     where: { userId },
     select: { groupId: true },
   });
-  const groupIds = memberGroups.map((m) => m.groupId);
+  const allGroupIds = memberGroups.map((m) => m.groupId);
+  const groupIds = opts.groupId
+    ? allGroupIds.filter((id) => id === opts.groupId)
+    : allGroupIds;
 
   const dateFilter: Record<string, unknown> = {};
   if (opts.from) dateFilter.gte = new Date(opts.from);

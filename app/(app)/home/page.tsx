@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "@/lib/client/api";
 import { IconClock, IconAlertTriangle, IconCheck, IconPaw, IconPerson } from "@/app/components/icons";
 import { PageLoading } from "@/app/components/loading";
+import { useGroupContext } from "@/app/contexts/group-context";
 
 interface PendingItem {
   patient: { id: string; name: string; species: string; photo_url?: string };
@@ -144,6 +145,7 @@ interface PatientOption    { id: string; name: string; species: string; groupId:
 interface MedicationOption { id: string; name: string; doseUnit: string; }
 
 function AdHocModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const { activeGroup } = useGroupContext();
   const [step, setStep] = useState<"patient" | "dose">("patient");
 
   // Step 1
@@ -161,11 +163,12 @@ function AdHocModal({ onClose, onDone }: { onClose: () => void; onDone: () => vo
   const [error, setError]               = useState("");
 
   useEffect(() => {
-    api.get<{ patients: PatientOption[] }>("/patients")
+    const url = activeGroup ? `/patients?group_id=${activeGroup.id}` : "/patients";
+    api.get<{ patients: PatientOption[] }>(url)
       .then((d) => setPatients(d.patients))
       .catch(() => {})
       .finally(() => setLoadingPatients(false));
-  }, []);
+  }, [activeGroup]);
 
   useEffect(() => {
     if (!selectedPatient) return;
@@ -397,6 +400,7 @@ function PendingCard({ item, onApply }: { item: PendingItem; onApply: () => void
 type TypeFilter = "all" | "human" | "animal";
 
 export default function HomePage() {
+  const { activeGroup } = useGroupContext();
   const [data, setData] = useState<{ date: string; items: PendingItem[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [applyItem, setApplyItem] = useState<PendingItem | null>(null);
@@ -409,10 +413,12 @@ export default function HomePage() {
   const [medicationFilter, setMedicationFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (groupId?: string) => {
     try {
       const tzOffset = -new Date().getTimezoneOffset(); // e.g. -180 for UTC-3
-      const result = await api.get<{ date: string; items: PendingItem[] }>(`/dashboard/pending?tz_offset=${tzOffset}`);
+      const params = new URLSearchParams({ tz_offset: String(tzOffset) });
+      if (groupId) params.set("group_id", groupId);
+      const result = await api.get<{ date: string; items: PendingItem[] }>(`/dashboard/pending?${params}`);
       setData(result);
     } catch { } finally {
       setLoading(false);
@@ -421,10 +427,11 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 60000);
+    if (activeGroup === undefined) return; // context still loading
+    fetchData(activeGroup?.id);
+    const interval = setInterval(() => fetchData(activeGroup?.id), 60000);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [fetchData, activeGroup]);
 
   useEffect(() => {
     const tick = setInterval(() => setCountdown((c) => (c > 0 ? c - 1 : 60)), 1000);
@@ -619,7 +626,7 @@ export default function HomePage() {
               setQueuedToast((n) => n + 1);
               setTimeout(() => setQueuedToast((n) => Math.max(0, n - 1)), 5000);
             } else {
-              fetchData();
+              fetchData(activeGroup?.id);
             }
           }}
         />
@@ -628,7 +635,7 @@ export default function HomePage() {
       {adHocOpen && (
         <AdHocModal
           onClose={() => setAdHocOpen(false)}
-          onDone={() => { setAdHocOpen(false); fetchData(); }}
+          onDone={() => { setAdHocOpen(false); fetchData(activeGroup?.id); }}
         />
       )}
 

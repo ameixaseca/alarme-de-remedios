@@ -11,10 +11,11 @@ export async function GET(req: NextRequest) {
   const skip = parseInt(p.get("offset") ?? "0");
 
   const result = await listApplicationLog(user.userId, {
-    patientId: p.get("patient_id") ?? undefined,
+    patientId:    p.get("patient_id")  ?? undefined,
     medicationId: p.get("medication_id") ?? undefined,
-    from: p.get("from") ?? undefined,
-    to: p.get("to") ?? undefined,
+    from:         p.get("from")        ?? undefined,
+    to:           p.get("to")          ?? undefined,
+    groupId:      p.get("group_id")    ?? undefined,
     take,
     skip,
   });

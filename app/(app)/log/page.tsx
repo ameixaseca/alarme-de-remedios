@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/client/api";
 import { IconClipboard } from "@/app/components/icons";
 import { SectionLoading } from "@/app/components/loading";
+import { useGroupContext } from "@/app/contexts/group-context";
 
 /* ─── Application log ───────────────────────────────────── */
 interface LogEntry {
@@ -69,12 +70,14 @@ function formatValue(field: string, value: unknown): string {
 }
 
 export default function LogPage() {
+  const { activeGroup } = useGroupContext();
   const [tab, setTab] = useState<"applications" | "prescriptions">("applications");
 
   return (
     <div className="space-y-5">
       <div>
         <h1 className="font-bold text-xl text-gray-900">Log</h1>
+        {activeGroup && <p className="text-sm text-gray-400 mt-0.5">{activeGroup.name}</p>}
       </div>
 
       {/* Tabs */}
@@ -92,13 +95,13 @@ export default function LogPage() {
         ))}
       </div>
 
-      {tab === "applications" ? <ApplicationLog /> : <PrescriptionLog />}
+      {tab === "applications" ? <ApplicationLog groupId={activeGroup?.id} /> : <PrescriptionLog />}
     </div>
   );
 }
 
 /* ─── Application log tab ───────────────────────────────── */
-function ApplicationLog() {
+function ApplicationLog({ groupId }: { groupId?: string }) {
   const [items, setItems] = useState<LogEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -106,7 +109,7 @@ function ApplicationLog() {
   const [filters, setFilters] = useState({ from: "", to: "", patient_id: "", medication_id: "" });
   const [applied, setApplied] = useState(filters);
 
-  const load = useCallback(async (f: typeof filters, off: number) => {
+  const load = useCallback(async (f: typeof filters, off: number, gid?: string) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ limit: String(LIMIT), offset: String(off) });
@@ -114,6 +117,7 @@ function ApplicationLog() {
       if (f.to) { const t = new Date(f.to); t.setHours(23, 59, 59); params.set("to", t.toISOString()); }
       if (f.patient_id) params.set("patient_id", f.patient_id);
       if (f.medication_id) params.set("medication_id", f.medication_id);
+      if (gid) params.set("group_id", gid);
       const data = await api.get<{ total: number; items: LogEntry[] }>(`/applications/log?${params}`);
       setItems(data.items);
       setTotal(data.total);
@@ -122,7 +126,9 @@ function ApplicationLog() {
     }
   }, []);
 
-  useEffect(() => { load(applied, offset); }, [load, applied, offset]);
+  // Reset to first page when group changes
+  useEffect(() => { setOffset(0); }, [groupId]);
+  useEffect(() => { load(applied, offset, groupId); }, [load, applied, offset, groupId]);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();

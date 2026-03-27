@@ -1,9 +1,10 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { api } from "@/lib/client/api";
 import { IconPaw, IconPerson, IconChevronRight, IconPlus, IconX } from "@/app/components/icons";
 import { PageLoading } from "@/app/components/loading";
+import { useGroupContext } from "@/app/contexts/group-context";
 
 interface Patient {
   id: string;
@@ -32,33 +33,30 @@ function patientSubtitle(p: Patient) {
 }
 
 export default function PatientsPage() {
+  const { activeGroup } = useGroupContext();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
   const [patientType, setPatientType] = useState<"animal" | "human">("animal");
   const [form, setForm] = useState({
-    group_id: "", name: "", species: "", breed: "", weight_kg: "", gender: "", birth_date: "",
+    name: "", species: "", breed: "", weight_kg: "", gender: "", birth_date: "",
   });
   const [error, setError] = useState("");
 
-  async function fetchAll() {
+  const fetchPatients = useCallback(async (groupId: string) => {
+    setLoading(true);
     try {
-      const [pData, gData] = await Promise.all([
-        api.get<{ patients: Patient[] }>("/patients"),
-        api.get<{ groups: { id: string; name: string }[] }>("/groups"),
-      ]);
-      setPatients(pData.patients);
-      setGroups(gData.groups);
-      if (gData.groups.length > 0 && !form.group_id) {
-        setForm((f) => ({ ...f, group_id: gData.groups[0].id }));
-      }
+      const { patients: list } = await api.get<{ patients: Patient[] }>(`/patients?group_id=${groupId}`);
+      setPatients(list);
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    if (!activeGroup) return;
+    fetchPatients(activeGroup.id);
+  }, [activeGroup, fetchPatients]);
 
   function resetForm() {
     setForm((f) => ({ ...f, name: "", species: "", breed: "", weight_kg: "", gender: "", birth_date: "" }));
@@ -68,11 +66,12 @@ export default function PatientsPage() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (!activeGroup) return;
     setError("");
     try {
       const isHuman = patientType === "human";
       await api.post("/patients", {
-        group_id: form.group_id,
+        group_id: activeGroup.id,
         name: form.name,
         species: isHuman ? "Humano" : form.species,
         breed: isHuman ? undefined : (form.breed || undefined),
@@ -82,7 +81,7 @@ export default function PatientsPage() {
       });
       setShowForm(false);
       resetForm();
-      fetchAll();
+      fetchPatients(activeGroup.id);
     } catch (err: any) {
       setError(err.message);
     }
@@ -94,7 +93,10 @@ export default function PatientsPage() {
     <div className="space-y-5">
       {/* Page header */}
       <div className="flex items-center justify-between">
-        <h1 className="font-bold text-xl text-gray-900">Pacientes</h1>
+        <div>
+          <h1 className="font-bold text-xl text-gray-900">Pacientes</h1>
+          {activeGroup && <p className="text-sm text-gray-400 mt-0.5">{activeGroup.name}</p>}
+        </div>
         <button
           onClick={() => { setShowForm(!showForm); if (showForm) resetForm(); }}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors ${
@@ -117,17 +119,11 @@ export default function PatientsPage() {
             </div>
           )}
           <form onSubmit={handleCreate} className="space-y-4">
-            {/* Group */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Grupo</label>
-              <select
-                className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                value={form.group_id}
-                onChange={(e) => setForm({ ...form, group_id: e.target.value })}
-              >
-                {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-              </select>
-            </div>
+            {activeGroup && (
+              <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+                Será adicionado ao grupo: <span className="font-semibold text-gray-700">{activeGroup.name}</span>
+              </div>
+            )}
 
             {/* Patient type toggle */}
             <div>

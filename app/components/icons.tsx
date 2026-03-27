@@ -40,6 +40,10 @@ export function IconChevronLeft(p: IconProps) {
   return <svg {...base} strokeWidth={2} {...p}><path d="M15 18l-6-6 6-6" /></svg>;
 }
 
+export function IconChevronDown(p: IconProps) {
+  return <svg {...base} strokeWidth={2} {...p}><path d="M6 9l6 6 6-6" /></svg>;
+}
+
 export function IconPaw({ className, ...p }: IconProps) {
   return <svg className={className} viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M4.5 10.5c.828 0 1.5-1.343 1.5-3s-.672-3-1.5-3S3 5.843 3 7.5s.672 3 1.5 3zm5.5-1c0-1.657.672-3 1.5-3S13 7.843 13 9.5 12.328 12.5 11.5 12.5 10 11.157 10 9.5zm5-.5c.828 0 1.5-1.343 1.5-3s-.672-3-1.5-3S13 4.843 13 6.5s.672 3 1.5 3zm5 1c.828 0 1.5-1.343 1.5-3s-.672-3-1.5-3S19 5.843 19 7.5s.672 3 1.5 3zM17.34 13.77c-.28-.6-1.27-1.9-2.34-2.27h-4c-1.07.37-2.06 1.67-2.34 2.27-.3.64-.59 2.27-.59 2.27.03 1.77 1.43 3.2 3.18 3.2h3.5c1.75 0 3.15-1.43 3.18-3.2 0 0-.29-1.63-.59-2.27z" /></svg>;
 }
