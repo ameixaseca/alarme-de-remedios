@@ -67,6 +67,14 @@ export function IconChevronRight({ width = 24, height = 24, color = 'currentColo
   );
 }
 
+export function IconChevronDown({ width = 24, height = 24, color = 'currentColor', strokeWidth = 2 }: IconProps) {
+  return (
+    <Svg {...base} width={width} height={height}>
+      <Path stroke={color} strokeWidth={strokeWidth} d="M6 9l6 6 6-6" />
+    </Svg>
+  );
+}
+
 export function IconPlus({ width = 24, height = 24, color = 'currentColor', strokeWidth = 2 }: IconProps) {
   return (
     <Svg {...base} width={width} height={height}>

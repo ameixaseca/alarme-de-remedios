@@ -1,40 +1,50 @@
-import { TouchableOpacity, Text, ActivityIndicator, TouchableOpacityProps } from 'react-native';
+import { TouchableOpacity, Text, ActivityIndicator, ViewStyle } from 'react-native';
 
-type ButtonVariant = 'primary' | 'secondary' | 'danger';
+type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
 
-interface ButtonProps extends TouchableOpacityProps {
+interface ButtonProps {
   label: string;
-  variant?: ButtonVariant;
+  onPress: () => void;
+  variant?: Variant;
   loading?: boolean;
+  disabled?: boolean;
   className?: string;
 }
 
-const variantStyles: Record<ButtonVariant, { container: string; text: string }> = {
-  primary: { container: 'bg-indigo-600', text: 'text-white' },
-  secondary: { container: 'bg-gray-100 border border-gray-300', text: 'text-gray-700' },
-  danger: { container: 'bg-red-600', text: 'text-white' },
+const variantStyles: Record<Variant, string> = {
+  primary: 'bg-indigo-600 active:bg-indigo-700',
+  secondary: 'bg-white border border-gray-300 active:bg-gray-50',
+  danger: 'bg-red-600 active:bg-red-700',
+  ghost: 'active:bg-gray-100',
+};
+
+const labelStyles: Record<Variant, string> = {
+  primary: 'text-white font-semibold',
+  secondary: 'text-gray-700 font-semibold',
+  danger: 'text-white font-semibold',
+  ghost: 'text-gray-600 font-medium',
 };
 
 export function Button({
   label,
+  onPress,
   variant = 'primary',
   loading = false,
-  disabled,
+  disabled = false,
   className = '',
-  ...rest
 }: ButtonProps) {
-  const styles = variantStyles[variant];
-  const isDisabled = disabled || loading;
-
   return (
     <TouchableOpacity
-      className={`rounded-lg px-4 py-3 items-center justify-center flex-row gap-2 ${styles.container} ${isDisabled ? 'opacity-60' : ''} ${className}`}
-      disabled={isDisabled}
-      activeOpacity={0.75}
-      {...rest}
+      className={`rounded-lg px-4 py-3 items-center justify-center flex-row gap-2 ${variantStyles[variant]} ${disabled ? 'opacity-50' : ''} ${className}`}
+      onPress={onPress}
+      disabled={loading || disabled}
+      activeOpacity={0.8}
     >
-      {loading && <ActivityIndicator size="small" color={variant === 'secondary' ? '#374151' : '#ffffff'} />}
-      <Text className={`text-base font-semibold ${styles.text}`}>{label}</Text>
+      {loading ? (
+        <ActivityIndicator color={variant === 'secondary' || variant === 'ghost' ? '#4f46e5' : 'white'} size="small" />
+      ) : (
+        <Text className={`text-base ${labelStyles[variant]}`}>{label}</Text>
+      )}
     </TouchableOpacity>
   );
 }

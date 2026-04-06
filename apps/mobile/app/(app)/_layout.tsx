@@ -1,12 +1,29 @@
 import { Redirect } from 'expo-router';
 import { Tabs } from 'expo-router';
+import { View } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
+import { LoadingSpinner } from '../../components/LoadingSpinner';
+import { GroupSwitcher } from '../../components/GroupSwitcher';
+import { NotificationBell } from '../../components/NotificationBell';
+import { OfflineBanner } from '../../components/OfflineBanner';
 import { IconHome, IconPill, IconUsers, IconGroup } from '../../components/icons';
+
+function AppHeader() {
+  return (
+    <View className="bg-white border-b border-gray-200">
+      <OfflineBanner />
+      <View className="flex-row items-center justify-between px-4 py-2 pt-12">
+        <GroupSwitcher />
+        <NotificationBell />
+      </View>
+    </View>
+  );
+}
 
 export default function AppLayout() {
   const { isAuthenticated, isLoading } = useAuth();
 
-  if (isLoading) return null;
+  if (isLoading) return <LoadingSpinner fullScreen />;
   if (!isAuthenticated) return <Redirect href="/(auth)/login" />;
 
   return (
@@ -18,7 +35,8 @@ export default function AppLayout() {
           borderTopColor: '#e5e7eb',
           backgroundColor: '#ffffff',
         },
-        headerShown: false,
+        header: () => <AppHeader />,
+        headerShown: true,
       }}
     >
       <Tabs.Screen

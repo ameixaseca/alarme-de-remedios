@@ -1,15 +1,25 @@
-import { View, ViewProps } from 'react-native';
+import { View, ViewStyle } from 'react-native';
 
-interface CardProps extends ViewProps {
+interface CardProps {
+  children: React.ReactNode;
+  style?: ViewStyle;
   className?: string;
 }
 
-export function Card({ children, className = '', style, ...rest }: CardProps) {
+export function Card({ children, className = '', style }: CardProps) {
   return (
     <View
-      className={`bg-white rounded-xl shadow-sm border border-gray-100 ${className}`}
-      style={style}
-      {...rest}
+      className={`bg-white rounded-xl border border-gray-100 shadow-sm ${className}`}
+      style={[
+        {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.05,
+          shadowRadius: 3,
+          elevation: 2,
+        },
+        style,
+      ]}
     >
       {children}
     </View>
