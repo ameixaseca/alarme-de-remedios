@@ -49,6 +49,13 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <IconGroup width={size} height={size} color={color} />,
         }}
       />
+      {/* Patient detail — hidden from tab bar */}
+      <Tabs.Screen
+        name="patient/[id]"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }
