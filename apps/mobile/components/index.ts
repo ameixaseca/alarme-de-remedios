@@ -6,3 +6,5 @@ export { LoadingSpinner } from './LoadingSpinner';
 export { OfflineBanner } from './OfflineBanner';
 export { GroupSwitcher } from './GroupSwitcher';
 export { NotificationBell } from './NotificationBell';
+export { MedicationCard } from './MedicationCard';
+export { ApplicationModal } from './ApplicationModal';
