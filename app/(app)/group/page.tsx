@@ -1,9 +1,14 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/client/api";
-import { IconGroup, IconCopy, IconCheck, IconRefresh, IconX, IconPlus, IconCamera } from "@/app/components/icons";
+import {
+  IconGroup, IconCopy, IconCheck, IconRefresh, IconX,
+  IconPlus, IconCamera, IconPencil, IconTrash,
+} from "@/app/components/icons";
 import { PageLoading } from "@/app/components/loading";
 import { PhotoCropModal } from "@/app/components/PhotoCropModal";
+import { useGroupContext } from "@/app/contexts/group-context";
 
 interface Group {
   id: string;
@@ -17,19 +22,33 @@ interface Group {
 }
 
 export default function GroupPage() {
-  const [groups, setGroups] = useState<Group[]>([]);
+  const router = useRouter();
+  const { refreshGroups, setActiveGroup } = useGroupContext();
+
+  const [groups, setGroups]               = useState<Group[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
-  const [showJoin, setShowJoin] = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
-  const [joinCode, setJoinCode] = useState("");
-  const [newGroupName, setNewGroupName] = useState("");
-  const [error, setError] = useState("");
+  const [loading, setLoading]             = useState(true);
+  const [copied, setCopied]               = useState(false);
+  const [showJoin, setShowJoin]           = useState(false);
+  const [showCreate, setShowCreate]       = useState(false);
+  const [joinCode, setJoinCode]           = useState("");
+  const [newGroupName, setNewGroupName]   = useState("");
+  const [error, setError]                 = useState("");
   const [currentUserId, setCurrentUserId] = useState("");
-  const [cropFile, setCropFile] = useState<File | null>(null);
+
+  // Photo
+  const [cropFile, setCropFile]           = useState<File | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Edit name
+  const [editingName, setEditingName]     = useState(false);
+  const [nameInput, setNameInput]         = useState("");
+  const [savingName, setSavingName]       = useState(false);
+
+  // Delete
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting]           = useState(false);
 
   async function fetchGroups() {
     const data = await api.get<{ groups: { id: string; name: string }[] }>("/groups");
@@ -39,6 +58,7 @@ export default function GroupPage() {
       setGroups(data.groups as Group[]);
     } else {
       setGroups([]);
+      setSelectedGroup(null);
     }
     setLoading(false);
   }
@@ -57,6 +77,8 @@ export default function GroupPage() {
   async function handleSelectGroup(groupId: string) {
     const detail = await api.get<Group>(`/groups/${groupId}`);
     setSelectedGroup(detail);
+    setEditingName(false);
+    setConfirmDelete(false);
   }
 
   function copyInviteCode() {
@@ -90,6 +112,7 @@ export default function GroupPage() {
       setShowJoin(false);
       setJoinCode("");
       fetchGroups();
+      await refreshGroups();
     } catch (err: any) {
       setError(err.message);
     }
@@ -103,11 +126,13 @@ export default function GroupPage() {
       setShowCreate(false);
       setNewGroupName("");
       fetchGroups();
+      await refreshGroups();
     } catch (err: any) {
       setError(err.message);
     }
   }
 
+  // ── Photo ────────────────────────────────────────────────
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) setCropFile(file);
@@ -121,10 +146,61 @@ export default function GroupPage() {
     try {
       await api.patch(`/groups/${selectedGroup.id}`, { photo_url: base64 });
       await handleSelectGroup(selectedGroup.id);
+      await refreshGroups();
     } catch (err: any) {
       setError(err.message);
     } finally {
       setUploadingPhoto(false);
+    }
+  }
+
+  // ── Edit name ────────────────────────────────────────────
+  function startEditName() {
+    setNameInput(selectedGroup?.name ?? "");
+    setEditingName(true);
+  }
+
+  async function handleSaveName(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedGroup || !nameInput.trim()) return;
+    setSavingName(true);
+    try {
+      await api.patch(`/groups/${selectedGroup.id}`, { name: nameInput.trim() });
+      await handleSelectGroup(selectedGroup.id);
+      await refreshGroups();
+      setEditingName(false);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSavingName(false);
+    }
+  }
+
+  // ── Delete ───────────────────────────────────────────────
+  async function handleDelete() {
+    if (!selectedGroup) return;
+    setDeleting(true);
+    setError("");
+    try {
+      await api.delete(`/groups/${selectedGroup.id}`);
+      await refreshGroups();
+      // Navigate away; refreshGroups will pick the next available group
+      router.replace("/group");
+      // Re-fetch local list
+      const data = await api.get<{ groups: { id: string; name: string }[] }>("/groups");
+      if (data.groups.length > 0) {
+        const detail = await api.get<Group>(`/groups/${data.groups[0].id}`);
+        setSelectedGroup(detail);
+        setGroups(data.groups as Group[]);
+      } else {
+        setGroups([]);
+        setSelectedGroup(null);
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
     }
   }
 
@@ -246,10 +322,10 @@ export default function GroupPage() {
       {/* Group detail */}
       {selectedGroup ? (
         <div className="space-y-4">
-          {/* Invite code */}
+          {/* Info card */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            {/* Photo + name row */}
             <div className="flex items-center gap-3 mb-3">
-              {/* Group photo */}
               {isAdmin ? (
                 <button
                   type="button"
@@ -279,9 +355,52 @@ export default function GroupPage() {
                   <IconGroup className="w-6 h-6 text-indigo-500" />
                 </div>
               )}
-              <h2 className="font-semibold text-gray-900">{selectedGroup.name}</h2>
+
+              {/* Name — editable for admins */}
+              <div className="flex-1 min-w-0">
+                {editingName ? (
+                  <form onSubmit={handleSaveName} className="flex items-center gap-2">
+                    <input
+                      autoFocus
+                      required
+                      value={nameInput}
+                      onChange={(e) => setNameInput(e.target.value)}
+                      className="flex-1 border border-indigo-300 rounded-lg px-2.5 py-1.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={savingName}
+                      className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50 shrink-0"
+                    >
+                      {savingName ? "…" : "Salvar"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingName(false)}
+                      className="p-1.5 text-gray-400 hover:text-gray-600"
+                    >
+                      <IconX className="w-4 h-4" />
+                    </button>
+                  </form>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <h2 className="font-semibold text-gray-900 truncate">{selectedGroup.name}</h2>
+                    {isAdmin && (
+                      <button
+                        onClick={startEditName}
+                        className="p-1 text-gray-300 hover:text-indigo-500 transition-colors shrink-0"
+                        title="Renomear grupo"
+                      >
+                        <IconPencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="bg-indigo-50 rounded-lg p-3.5 flex items-center justify-between gap-3 mb-3">
+
+            {/* Invite code */}
+            <div className="bg-indigo-50 rounded-lg p-3.5 flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs text-indigo-500 mb-1">Código de convite</p>
                 <p className="font-mono font-bold text-indigo-700 text-xl tracking-[0.3em]">
@@ -353,6 +472,47 @@ export default function GroupPage() {
               ))}
             </div>
           </div>
+
+          {/* Danger zone — admin only */}
+          {isAdmin && (
+            <div className="bg-white rounded-xl border border-red-100 shadow-sm p-5">
+              <h2 className="font-semibold text-red-700 mb-1 text-sm">Zona de perigo</h2>
+              <p className="text-xs text-gray-500 mb-4">
+                A exclusão do grupo remove permanentemente todos os pacientes, medicamentos e prescrições associados. Esta ação não pode ser desfeita.
+              </p>
+
+              {confirmDelete ? (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-3">
+                  <p className="text-sm font-medium text-red-700">
+                    Tem certeza que deseja excluir <span className="font-bold">{selectedGroup.name}</span>?
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setConfirmDelete(false)}
+                      className="flex-1 border border-gray-300 text-gray-600 rounded-lg py-2 text-sm font-medium hover:bg-gray-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="flex-1 bg-red-600 text-white rounded-lg py-2 text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {deleting ? "Excluindo…" : "Excluir permanentemente"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors"
+                >
+                  <IconTrash className="w-4 h-4" />
+                  Excluir grupo
+                </button>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-20 text-center">

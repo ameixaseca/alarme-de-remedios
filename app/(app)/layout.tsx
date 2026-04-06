@@ -8,6 +8,7 @@ import {
 } from "@/app/components/icons";
 import { GroupProvider, useGroupContext, type Group } from "@/app/contexts/group-context";
 import { api } from "@/lib/client/api";
+import { ensurePushSubscription } from "@/app/sw-register";
 
 const navItems = [
   { href: "/home",        label: "Início",     Icon: IconHome },
@@ -68,7 +69,7 @@ function GroupSwitcher({ compact }: { compact?: boolean }) {
       <div ref={ref} className="relative">
         <button
           onClick={() => hasMany && setOpen((o) => !o)}
-          className={`flex items-center gap-1.5 max-w-[130px] ${hasMany ? "cursor-pointer" : "cursor-default"}`}
+          className={`flex items-center gap-1 min-w-0 ${hasMany ? "cursor-pointer" : "cursor-default"}`}
         >
           <GroupInitial name={activeGroup.name} />
           <span className="text-xs font-semibold text-gray-700 truncate">{activeGroup.name}</span>
@@ -211,7 +212,7 @@ interface NotificationItem {
   createdAt: string;
 }
 
-function NotificationBell() {
+function NotificationBell({ align = "right" }: { align?: "right" | "left" }) {
   const [open, setOpen]               = useState(false);
   const [items, setItems]             = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -291,7 +292,9 @@ function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden">
+        <div className={`absolute w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden ${
+          align === "right" ? "right-0 top-full mt-2" : "left-0 bottom-full mb-2"
+        }`}>
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <h3 className="font-semibold text-gray-900 text-sm">Notificações</h3>
@@ -360,7 +363,8 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isLanding) return;
     const token = localStorage.getItem("access_token");
-    if (!token) router.replace("/login");
+    if (!token) { router.replace("/login"); return; }
+    ensurePushSubscription();
   }, [router, isLanding]);
 
   function handleLogout() {
@@ -376,18 +380,15 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-gray-50">
       {/* ── Desktop sidebar ─────────────────────────────────── */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-60 flex-col bg-white border-r border-gray-200">
-        {/* Logo */}
-        <div className="flex items-center gap-2.5 px-5 h-16 border-b border-gray-200 shrink-0">
+        {/* Logo + Group switcher */}
+        <div className="flex items-center gap-3 px-4 h-16 border-b border-gray-200 shrink-0">
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
             <IconPill className="w-4.5 h-4.5 text-white" />
           </div>
-          <span className="font-bold text-gray-900 text-base tracking-tight">DailyMed</span>
-        </div>
-
-        {/* Group switcher */}
-        <div className="pt-3">
-          <p className="px-5 text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">Grupo ativo</p>
-          <GroupSwitcher />
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-gray-900 text-sm tracking-tight leading-none mb-1">DailyMed</p>
+            <GroupSwitcher compact />
+          </div>
         </div>
 
         {/* Nav links */}
@@ -414,7 +415,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
         {/* Notifications + Logout */}
         <div className="px-3 pb-5 shrink-0 space-y-1">
           <div className="flex items-center gap-3 px-3 py-2.5">
-            <NotificationBell />
+            <NotificationBell align="left" />
             <span className="text-sm font-medium text-gray-600">Notificações</span>
           </div>
           <button

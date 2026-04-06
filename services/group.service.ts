@@ -80,6 +80,11 @@ export async function removeMember(groupId: string, adminId: string, targetUserI
   });
 }
 
+export async function deleteGroup(groupId: string, userId: string) {
+  await assertAdmin(groupId, userId);
+  await prisma.group.delete({ where: { id: groupId } });
+}
+
 export async function regenerateInviteCode(groupId: string, userId: string) {
   await assertAdmin(groupId, userId);
   const inviteCode = await uniqueInviteCode();

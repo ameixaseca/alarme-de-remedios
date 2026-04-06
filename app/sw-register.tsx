@@ -35,14 +35,26 @@ async function registerPushSubscription(reg: ServiceWorkerRegistration) {
   }
 }
 
+/**
+ * Call this after the user is authenticated to ensure the push subscription
+ * is saved to the server. Safe to call multiple times (server uses upsert).
+ */
+export async function ensurePushSubscription() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await registerPushSubscription(reg);
+  } catch {
+    // silently ignore
+  }
+}
+
 export default function ServiceWorkerRegistrar() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
     navigator.serviceWorker.register("/sw.js").then((reg) => {
-      // Register push subscription after SW is ready
       navigator.serviceWorker.ready.then((activeReg) => {
-        registerPushSubscription(activeReg);
         activeReg.active?.postMessage({ type: "GET_QUEUE_COUNT" });
       });
       return reg;

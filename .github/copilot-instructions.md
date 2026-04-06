@@ -2,8 +2,8 @@
 
 # DailyMed — Documentação de Requisitos e Design Técnico
 
-> Sistema de controle de aplicação de medicação para pets  
-> Stack: Next.js · PostgreSQL (Railway) · REST API documentada
+> Sistema de controle de aplicação de medicação para pets
+> Stack: Next.js · PostgreSQL (Railway/Supabase) · REST API · PWA · Web Push · IA (Claude)
 
 ---
 
@@ -19,7 +19,6 @@
 8. [Telas e Componentes](#8-telas-e-componentes)
 9. [Regras de Negócio](#9-regras-de-negócio)
 10. [Estratégia de Deploy](#10-estratégia-de-deploy)
-11. [Prompt de Implementação](#11-prompt-de-implementação)
 
 ---
 
@@ -41,63 +40,87 @@
 
 ### 2.1 Autenticação
 
-- RF-01: O sistema deve permitir cadastro de usuário com nome, e-mail e senha.
-- RF-02: O sistema deve autenticar usuários via e-mail e senha armazenados no banco de dados (hash bcrypt).
-- RF-03: A sessão deve ser mantida via JWT (access token + refresh token).
+- RF-01: O sistema deve permitir cadastro de usuário com nome, e-mail e senha (mínimo 8 caracteres).
+- RF-02: O sistema deve autenticar usuários via e-mail e senha armazenados no banco de dados (hash bcrypt, 12 rounds).
+- RF-03: A sessão deve ser mantida via JWT (access token 15 min + refresh token 7 dias).
 - RF-04: O usuário deve poder fazer logout.
+- RF-05: O client-side API wrapper renova o access token automaticamente ao receber 401, usando o refresh token. Se o refresh falhar, redireciona para `/login`.
 
 ### 2.2 Grupos
 
-- RF-05: Um usuário pode criar um grupo, tornando-se seu administrador.
-- RF-06: Um grupo possui um código único de convite (alfanumérico, 8 caracteres).
-- RF-07: Um usuário pode entrar em um grupo existente informando o código de convite.
-- RF-08: Um usuário pode pertencer a múltiplos grupos.
-- RF-09: O administrador do grupo pode remover membros.
-- RF-10: O administrador pode regenerar o código de convite.
+- RF-06: Um usuário pode criar um grupo, tornando-se seu administrador.
+- RF-07: Um grupo possui um código único de convite (alfanumérico, 8 caracteres, maiúsculas — gerado via nanoid).
+- RF-08: Um usuário pode entrar em um grupo existente informando o código de convite.
+- RF-09: Um usuário pode pertencer a múltiplos grupos simultaneamente.
+- RF-10: O grupo ativo é selecionado via `GroupSwitcher` no layout e persistido em localStorage (`activeGroupId`).
+- RF-11: O administrador do grupo pode remover membros (exceto a si mesmo).
+- RF-12: O administrador pode regenerar o código de convite.
+- RF-13: O administrador pode renomear o grupo e atualizar a foto do grupo (`photoUrl`).
+- RF-14: O administrador pode excluir o grupo.
 
 ### 2.3 Pacientes (Pets)
 
-- RF-11: Um usuário membro de um grupo pode cadastrar pacientes vinculados àquele grupo.
-- RF-12: Cada paciente pertence a exatamente um grupo.
-- RF-13: Os dados de um paciente incluem: nome, espécie, raça, data de nascimento, peso, foto (opcional) e observações.
-- RF-14: Qualquer membro do grupo pode visualizar, editar e arquivar pacientes do grupo.
+- RF-15: Um membro do grupo pode cadastrar pacientes vinculados àquele grupo.
+- RF-16: Cada paciente pertence a exatamente um grupo.
+- RF-17: Os dados de um paciente incluem: nome, espécie, raça, gênero, data de nascimento, peso (kg), foto (URL, opcional) e observações.
+- RF-18: Qualquer membro do grupo pode visualizar, editar e arquivar pacientes do grupo.
+- RF-19: O arquivamento é lógico (`isArchived = true`); pacientes arquivados não aparecem nas listagens normais.
 
 ### 2.4 Medicamentos
 
-- RF-15: Um usuário pode cadastrar medicamentos com: nome, fabricante, princípio ativo, método de aplicação (oral, injetável, tópico, etc.), unidade de dosagem (mg, ml, comprimido, etc.) e dosagem padrão por unidade.
-- RF-16: Um medicamento pode ter uma quantidade em estoque (opcional), expressa na unidade definida.
-- RF-17: Medicamentos são globais ao grupo — qualquer membro pode cadastrar e visualizar.
+- RF-20: Um membro pode cadastrar medicamentos com: nome, fabricante, princípio ativo, método de aplicação, unidade de dosagem e quantidade em estoque (opcional).
+- RF-21: Medicamentos são globais ao grupo — qualquer membro pode cadastrar e visualizar.
+- RF-22: O sistema suporta identificação automática de medicamento a partir de uma foto, usando IA (Claude Haiku). O retorno inclui nome, princípio ativo, fabricante, unidade e método de aplicação.
 
 ### 2.5 Prescrições (Medicamento ↔ Paciente)
 
-- RF-18: Um membro do grupo pode vincular um medicamento a um paciente, criando uma prescrição.
-- RF-19: A prescrição deve conter: medicamento, paciente, dose por aplicação, frequência, horários sugeridos/confirmados e duração em dias (opcional).
-- RF-20: Ao definir a frequência, o sistema deve sugerir automaticamente uma sequência de horários espaçados igualmente ao longo do dia, que o usuário pode editar ou confirmar.
-- RF-21: A dose por aplicação pode ser uma fração da unidade do medicamento (ex.: 1/4 de comprimido). O sistema deve aceitar frações e valores decimais.
-- RF-22: Uma prescrição pode ter data de início e, se a duração em dias for informada, uma data de término calculada automaticamente.
-- RF-23: O status da prescrição pode ser: ativa, pausada, encerrada.
+- RF-23: Um membro pode vincular um medicamento a um paciente, criando uma prescrição.
+- RF-24: A prescrição contém: medicamento, paciente, dose por aplicação, fração legível (ex: "1/4"), unidade, frequência em horas, horários de aplicação, duração em dias (opcional), data de início e status.
+- RF-25: Ao criar uma prescrição sem `schedule_times`, o sistema sugere automaticamente horários espaçados igualmente, começando às 08:00.
+- RF-26: A dose por aplicação pode ser fracionada (ex: "1/4 comprimido"). O sistema aceita decimais e strings de fração.
+- RF-27: Se `duration_days` for informado, a data de término é calculada automaticamente.
+- RF-28: O status da prescrição pode ser: ativa (`active`), pausada (`paused`), encerrada (`finished`).
+- RF-29: Toda criação, edição e exclusão de prescrição é registrada em um audit trail (`PrescriptionLog`) com os valores antes e depois de cada campo alterado.
+- RF-30: A exclusão de uma prescrição notifica todos os membros do grupo.
 
-### 2.6 Aplicações
+### 2.6 Aplicações (Doses Registradas)
 
-- RF-24: Um membro pode registrar a aplicação de uma dose para um paciente em uma prescrição.
-- RF-25: Cada aplicação deve registrar: data/hora, dose aplicada, quem aplicou e observações opcionais.
-- RF-26: Ao registrar uma aplicação, o sistema deve subtrair automaticamente a dose aplicada do estoque do medicamento (quando estoque estiver definido).
-- RF-27: É possível registrar aplicações retroativas (com data/hora no passado).
-- RF-28: É possível registrar aplicações fracionadas — o usuário informa a fração/quantidade real ministrada.
+- RF-31: Um membro pode registrar a aplicação de uma dose para um paciente em uma prescrição ativa.
+- RF-32: Cada aplicação registra: data/hora de aplicação, data/hora prevista (opcional), dose aplicada, quem aplicou e observações.
+- RF-33: Ao registrar uma aplicação, o sistema subtrai a dose do estoque do medicamento (quando estoque estiver definido). Estoque negativo é permitido.
+- RF-34: É possível registrar aplicações retroativas (com data/hora no passado).
+- RF-35: É possível registrar **aplicações avulso** (`isAdHoc = true`): doses não vinculadas a uma prescrição, diretamente para um paciente e medicamento.
+- RF-36: Aplicações offline são enfileiradas no IndexedDB pelo Service Worker e sincronizadas quando a conectividade é restaurada. Ao sincronizar, o grupo é notificado.
 
-### 2.7 Tela Inicial (Dashboard de Aplicações)
+### 2.7 Tela Principal (Medicações Pendentes)
 
-- RF-29: A tela inicial (após login) exibe todos os pacientes do grupo com medicações pendentes no dia, ordenados por proximidade do próximo horário de aplicação.
-- RF-30: Medicações cujo horário já passou e não foram aplicadas devem ser destacadas visualmente em vermelho com a label "Não aplicada".
-- RF-31: A lista deve atualizar automaticamente a cada 60 segundos (ou via WebSocket/SSE).
-- RF-32: A partir dessa tela, o usuário deve conseguir registrar uma aplicação com um clique.
+- RF-37: A tela `/home` exibe todas as medicações pendentes do dia para o grupo ativo, ordenadas por urgência.
+- RF-38: Medicações cujo horário já passou (> 15 min) e não foram aplicadas são destacadas como "atrasadas".
+- RF-39: A lista considera o fuso horário do usuário (parâmetro `tz_offset` em minutos do UTC).
+- RF-40: A partir dessa tela, o usuário pode registrar uma aplicação diretamente.
+- RF-41: A tela atualiza os dados automaticamente a cada 60 segundos.
 
 ### 2.8 Dashboard de Estoque e Projeção
 
-- RF-33: Um dashboard deve exibir todos os medicamentos do grupo com seu estoque atual.
-- RF-34: O sistema deve calcular a projeção de consumo diário de cada medicamento com base nas prescrições ativas.
-- RF-35: Medicamentos com estoque suficiente para menos de 7 dias de consumo devem aparecer em destaque (seção "Atenção — Estoque Baixo").
-- RF-36: O dashboard deve mostrar a data estimada de esgotamento de cada medicamento.
+- RF-42: Um dashboard exibe todos os medicamentos com estoque e projeção de consumo.
+- RF-43: O sistema calcula o consumo diário de cada medicamento com base nas prescrições ativas.
+- RF-44: Medicamentos com estoque suficiente para menos de 7 dias são destacados.
+- RF-45: O dashboard mostra a data estimada de esgotamento.
+
+### 2.9 Log de Aplicações
+
+- RF-46: Uma tela de log (`/log`) exibe o histórico completo de doses registradas, com filtros por paciente, medicamento, período e grupo.
+- RF-47: O log inclui aplicações tanto de prescrições quanto avulsas.
+- RF-48: O endpoint suporta paginação (máximo 100 itens por página).
+
+### 2.10 Notificações
+
+- RF-49: O sistema mantém um feed de notificações in-app por usuário.
+- RF-50: Os tipos de notificação são: `LATE_APPLICATION` (dose atrasada), `LOW_STOCK` (estoque baixo), `PRESCRIPTION_REMOVED` (prescrição removida), `OFFLINE_APPLICATION` (aplicação offline sincronizada).
+- RF-51: O sistema suporta notificações push via Web Push API (VAPID), enviando para todos os dispositivos registrados do usuário.
+- RF-52: A subscription push é registrada no primeiro acesso autenticado e salva no servidor.
+- RF-53: Notificações possuem deduplicação por `dedupKey` dentro de uma janela de 1 hora.
+- RF-54: O usuário pode marcar notificações como lidas individualmente ou em massa.
 
 ---
 
@@ -105,102 +128,108 @@
 
 - RNF-01: A aplicação deve ser uma PWA com suporte a instalação em dispositivos móveis e desktop.
 - RNF-02: A API deve ser RESTful, versionada (`/api/v1/`) e documentada via OpenAPI 3.0 (Swagger UI disponível em `/api/docs`).
-- RNF-03: A autenticação da API deve ser via Bearer Token (JWT) para facilitar integração com app mobile futuro.
-- RNF-04: O banco de dados deve ser PostgreSQL (Railway).
-- RNF-05: Senhas devem ser armazenadas com hash bcrypt (mínimo 12 rounds).
+- RNF-03: A autenticação da API deve ser via Bearer Token (JWT).
+- RNF-04: O banco de dados deve ser PostgreSQL (Railway ou Supabase).
+- RNF-05: Senhas devem ser armazenadas com hash bcrypt (12 rounds).
 - RNF-06: A aplicação deve funcionar bem em telas mobile (375px+) e desktop.
-- RNF-07: Tempos de resposta da API devem ser inferiores a 500ms para operações comuns.
-- RNF-08: O código deve ser estruturado de forma a facilitar a extração da camada de API para consumo por um app React Native ou Flutter futuramente.
+- RNF-07: O código deve ser estruturado de forma a facilitar a extração da camada de API para consumo por um app React Native ou Flutter futuramente.
+- RNF-08: A aplicação deve funcionar offline para registro de aplicações, com sincronização automática.
+- RNF-09: Notificações push devem ser enviadas via Web Push API (biblioteca `web-push` + chaves VAPID).
+- RNF-10: Identificação de medicamentos por foto deve usar IA (Claude Haiku via Anthropic API).
 
 ---
 
 ## 4. Modelo de Dados (ERD)
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          MODELO DE DADOS — DailyMed                           │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          MODELO DE DADOS — DailyMed                          │
+└──────────────────────────────────────────────────────────────────────────────┘
 
-┌──────────────┐          ┌──────────────────┐          ┌──────────────┐
-│    users     │          │  group_members   │          │    groups    │
-├──────────────┤          ├──────────────────┤          ├──────────────┤
-│ id (PK)      │──────────│ user_id (FK)     │──────────│ id (PK)      │
-│ name         │    N     │ group_id (FK)    │    N     │ name         │
-│ email        │          │ role             │          │ invite_code  │
-│ password_hash│          │   (admin|member) │          │ created_by   │
-│ created_at   │          │ joined_at        │          │ created_at   │
-│ updated_at   │          └──────────────────┘          │ updated_at   │
-└──────────────┘                                        └──────┬───────┘
-                                                               │ 1
-                                                               │
-                                                               │ N
-                                                        ┌──────▼───────┐
-                                                        │   patients   │
-                                                        ├──────────────┤
-                                                        │ id (PK)      │
-                                                        │ group_id (FK)│
-                                                        │ name         │
-                                                        │ species      │
-                                                        │ breed        │
-                                                        │ birth_date   │
-                                                        │ weight_kg    │
-                                                        │ photo_url    │
-                                                        │ notes        │
-                                                        │ is_archived  │
-                                                        │ created_at   │
-                                                        └──────┬───────┘
-                                                               │ 1
-                                                               │
-                                                               │ N
-┌──────────────────┐    N  ┌──────────────────────────────────▼────────────────┐
-│  medications     │───────│           prescriptions                           │
-├──────────────────┤  1    ├────────────────────────────────────────────────────┤
-│ id (PK)          │       │ id (PK)                                            │
-│ group_id (FK)    │       │ patient_id (FK)                                    │
-│ name             │       │ medication_id (FK)                                 │
-│ manufacturer     │       │ dose_quantity    ← quantidade por aplicação        │
-│ active_ingredient│       │ dose_fraction    ← ex: "1/4", "0.5" (nullable)    │
-│ application_method       │ dose_unit        ← herdado do medicamento          │
-│   (oral|inject.. │       │ frequency_hours  ← de X em X horas                │
-│    topical|other)│       │ schedule_times   ← JSONB: ["08:00","20:00",...]   │
-│ dose_unit        │       │ duration_days    ← nullable                        │
-│   (mg|ml|tablet..)       │ start_date                                         │
-│ stock_quantity   │       │ end_date         ← calculado                       │
-│   (nullable)     │       │ status           ← active|paused|finished          │
-│ stock_unit       │       │ created_by (FK→users)                              │
-│ created_at       │       │ created_at                                         │
-│ updated_at       │       │ updated_at                                         │
-└──────────────────┘       └───────────────────────────┬────────────────────────┘
-                                                       │ 1
-                                                       │
-                                                       │ N
-                           ┌───────────────────────────▼────────────────────────┐
-                           │                   applications                     │
-                           ├────────────────────────────────────────────────────┤
-                           │ id (PK)                                             │
-                           │ prescription_id (FK)                               │
-                           │ applied_by (FK→users)                              │
-                           │ applied_at      ← data/hora real da aplicação      │
-                           │ scheduled_at    ← horário previsto                 │
-                           │ dose_applied    ← pode diferir da dose prescrita   │
-                           │ notes                                               │
-                           │ created_at                                          │
-                           └────────────────────────────────────────────────────┘
+┌──────────────┐          ┌──────────────────┐          ┌──────────────────┐
+│    users     │          │  group_members   │          │      groups      │
+├──────────────┤          ├──────────────────┤          ├──────────────────┤
+│ id (UUID)    │──────────│ user_id (FK)     │──────────│ id (UUID)        │
+│ name         │    N     │ group_id (FK)    │    N     │ name             │
+│ email        │          │ role             │          │ photo_url        │
+│ passwordHash │          │   (admin|member) │          │ invite_code      │
+│ createdAt    │          │ joinedAt         │          │ created_by (FK)  │
+│ updatedAt    │          └──────────────────┘          │ createdAt        │
+└──────┬───────┘                                        │ updatedAt        │
+       │                                                └──────┬───────────┘
+       │ 1                                                     │ 1
+       │                                                       │
+       │ N                                                     │ N
+┌──────▼───────────────┐                             ┌─────────▼────────┐
+│    notifications     │                             │     patients     │
+├──────────────────────┤                             ├──────────────────┤
+│ id (cuid)            │                             │ id (UUID)        │
+│ userId (FK)          │                             │ groupId (FK)     │
+│ type (string)        │                             │ name             │
+│ title, body          │                             │ species, breed   │
+│ read (bool)          │                             │ gender           │
+│ data (JSON)          │                             │ birthDate        │
+│ dedupKey             │                             │ weightKg         │
+│ createdAt            │                             │ photoUrl, notes  │
+└──────────────────────┘                             │ isArchived       │
+                                                     │ createdAt        │
+┌──────────────────────┐                             └──────┬───────────┘
+│  push_subscriptions  │                                    │ 1
+├──────────────────────┤                                    │
+│ id (cuid)            │                                    │ N
+│ userId (FK)          │   ┌──────────────────────────────▼──────────────────┐
+│ endpoint (unique)    │   │              prescriptions                      │
+│ p256dh, auth         │   ├─────────────────────────────────────────────────┤
+│ createdAt            │   │ id (UUID)                                       │
+└──────────────────────┘   │ patientId (FK)                                  │
+                           │ medicationId (FK)                               │
+                           │ createdBy (FK → users)                          │
+┌──────────────┐    N      │ doseQuantity (Float)                            │
+│  medications │───────────│ doseFraction (String, nullable) ← ex: "1/4"    │
+├──────────────┤    1      │ doseUnit                                        │
+│ id (UUID)    │           │ frequencyHours (Float)                          │
+│ groupId (FK) │           │ scheduleTimes (JSON: ["08:00","20:00",...])     │
+│ name         │           │ durationDays (Int, nullable)                    │
+│ manufacturer │           │ startDate, endDate (nullable)                   │
+│ activeIngr.. │           │ status: active|paused|finished                  │
+│ appMethod    │           │ createdAt, updatedAt                            │
+│ doseUnit     │           └──────────────────────────┬──────────────────────┘
+│ stockQty     │                                      │ 1
+│   (nullable) │                                      │
+│ createdAt    │                                      │ N
+│ updatedAt    │           ┌──────────────────────────▼──────────────────────┐
+└──────────────┘           │                applications                     │
+                           ├─────────────────────────────────────────────────┤
+                           │ id (UUID)                                       │
+                           │ prescriptionId (FK, nullable) ← null = avulso  │
+                           │ medicationId (FK, nullable)   ← preench. avulso│
+                           │ patientId (FK, nullable)      ← preench. avulso│
+                           │ appliedBy (FK → users)                          │
+                           │ appliedAt                                       │
+                           │ scheduledAt (nullable)                          │
+                           │ doseApplied (Float)                             │
+                           │ isAdHoc (Boolean)                               │
+                           │ notes (nullable)                                │
+                           │ createdAt                                       │
+                           └─────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          prescription_logs (audit trail)                     │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ id (cuid) · prescriptionId (nullable) · patientId · patientName             │
+│ medicationId · medicationName · action (create|update|delete)               │
+│ performedBy (FK → users) · performedAt                                      │
+│ changes (JSON: { campo: [antes, depois] }) — null para create/delete        │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Tipos e Enums
 
-```sql
--- Enum: método de aplicação
-CREATE TYPE application_method AS ENUM (
-  'oral', 'injectable', 'topical', 'ophthalmic', 'otic', 'inhalation', 'other'
-);
-
--- Enum: status da prescrição
-CREATE TYPE prescription_status AS ENUM ('active', 'paused', 'finished');
-
--- Enum: papel no grupo
-CREATE TYPE group_role AS ENUM ('admin', 'member');
+```
+ApplicationMethod: oral | injectable | topical | ophthalmic | otic | inhalation | other
+PrescriptionStatus: active | paused | finished
+GroupRole:          admin | member
+PrescriptionAction: create | update | delete
 ```
 
 ---
@@ -208,114 +237,137 @@ CREATE TYPE group_role AS ENUM ('admin', 'member');
 ## 5. Arquitetura do Sistema
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                         ARQUITETURA — DailyMed                             │
-└──────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                             ARQUITETURA — DailyMed                           │
+└──────────────────────────────────────────────────────────────────────────────┘
 
-  ┌──────────────────────────────────────────────────────────┐
-  │                     CLIENT LAYER                         │
-  │                                                          │
-  │  ┌─────────────────────┐    ┌──────────────────────┐    │
-  │  │   PWA (Next.js)     │    │  Mobile App (futuro) │    │
-  │  │   React + Tailwind  │    │  React Native/Flutter│    │
-  │  │   Service Worker    │    │                      │    │
-  │  └──────────┬──────────┘    └──────────┬───────────┘    │
-  └─────────────┼─────────────────────────┼────────────────┘
-                │                         │
-                │  HTTPS + Bearer JWT     │
-                ▼                         ▼
-  ┌──────────────────────────────────────────────────────────┐
-  │                    SERVER LAYER (Next.js)                │
-  │                                                          │
-  │  ┌───────────────────────────────────────────────────┐  │
-  │  │              Next.js App Router                   │  │
-  │  │                                                   │  │
-  │  │  ┌──────────────────┐  ┌───────────────────────┐ │  │
-  │  │  │  Pages / RSC     │  │   API Routes          │ │  │
-  │  │  │  (SSR + Client)  │  │   /api/v1/*           │ │  │
-  │  │  └──────────────────┘  └──────────┬────────────┘ │  │
-  │  │                                   │              │  │
-  │  │  ┌────────────────────────────────▼────────────┐ │  │
-  │  │  │           Service Layer                     │ │  │
-  │  │  │  auth.service  │  group.service             │ │  │
-  │  │  │  patient.service│  medication.service       │ │  │
-  │  │  │  prescription.service│  application.service │ │  │
-  │  │  │  stock.service │  dashboard.service         │ │  │
-  │  │  └────────────────────────────────┬────────────┘ │  │
-  │  │                                   │              │  │
-  │  │  ┌────────────────────────────────▼────────────┐ │  │
-  │  │  │           Data Layer (Prisma ORM)           │ │  │
-  │  │  └────────────────────────────────┬────────────┘ │  │
-  │  └───────────────────────────────────┼──────────────┘  │
-  └──────────────────────────────────────┼─────────────────┘
-                                         │
-                                         │ Connection Pool
-                                         ▼
-  ┌──────────────────────────────────────────────────────────┐
-  │                  DATA LAYER (Railway)                    │
-  │                                                          │
-  │              PostgreSQL Database                         │
-  │              (gerenciado pelo Railway)                   │
-  └──────────────────────────────────────────────────────────┘
+  ┌────────────────────────────────────────────────────────────────────┐
+  │                          CLIENT LAYER                              │
+  │                                                                    │
+  │  ┌──────────────────────────────────┐  ┌────────────────────────┐ │
+  │  │         PWA (Next.js)            │  │  Mobile App (futuro)   │ │
+  │  │  React 19 + Tailwind CSS 4       │  │  React Native/Flutter  │ │
+  │  │  Service Worker (sw.js)          │  │                        │ │
+  │  │  ├─ App Shell cache              │  │                        │ │
+  │  │  ├─ Network-first para API       │  │                        │ │
+  │  │  ├─ Offline queue (IndexedDB)    │  │                        │ │
+  │  │  └─ Background Sync + Push       │  │                        │ │
+  │  └──────────────┬───────────────────┘  └──────────┬─────────────┘ │
+  └─────────────────┼──────────────────────────────────┼───────────────┘
+                    │  HTTPS + Bearer JWT               │
+                    ▼                                   ▼
+  ┌────────────────────────────────────────────────────────────────────┐
+  │                     SERVER LAYER (Next.js App Router)              │
+  │                                                                    │
+  │  ┌─────────────────────────────────────────────────────────────┐  │
+  │  │  API Routes /api/v1/*                                       │  │
+  │  │  ├─ auth/            ├─ patients/      ├─ applications/     │  │
+  │  │  ├─ groups/          ├─ medications/   ├─ dashboard/        │  │
+  │  │  ├─ prescriptions/   └─ notifications/                      │  │
+  │  └──────────────────────────────┬──────────────────────────────┘  │
+  │                                 │                                  │
+  │  ┌──────────────────────────────▼──────────────────────────────┐  │
+  │  │  Service Layer                                              │  │
+  │  │  auth.service  │ group.service    │ patient.service         │  │
+  │  │  medication.service │ prescription.service                  │  │
+  │  │  application.service │ dashboard.service                    │  │
+  │  │  notification.service                                       │  │
+  │  └──────────────────────────────┬──────────────────────────────┘  │
+  │                                 │                                  │
+  │  ┌──────────────────────────────▼──────────────────────────────┐  │
+  │  │  Data Layer (Prisma ORM 7)                                  │  │
+  │  └──────────────────────────────┬──────────────────────────────┘  │
+  └─────────────────────────────────┼──────────────────────────────────┘
+                                    │
+                                    │ Connection Pool
+                                    ▼
+  ┌────────────────────────────────────────────────────────────────────┐
+  │                  DATA LAYER (PostgreSQL)                           │
+  │  ├─ DATABASE_URL (pooler — Supabase/Railway)                      │
+  │  └─ DIRECT_URL  (migrations diretas)                              │
+  └────────────────────────────────────────────────────────────────────┘
 
-  ┌──────────────────────────────────────────────────────────┐
-  │                  CROSS-CUTTING                           │
-  │                                                          │
-  │  JWT Middleware → valida token em todas as rotas /api/v1 │
-  │  Swagger UI    → /api/docs (gerado via zod-to-openapi)  │
-  │  Rate Limiting → via middleware Next.js                  │
-  │  Logging       → estruturado (pino)                      │
-  └──────────────────────────────────────────────────────────┘
+  ┌────────────────────────────────────────────────────────────────────┐
+  │                  EXTERNAL SERVICES                                 │
+  │  ├─ Anthropic API (Claude Haiku) → identificação de medicamentos  │
+  │  └─ Web Push API (VAPID)         → notificações push browser      │
+  └────────────────────────────────────────────────────────────────────┘
+
+  ┌────────────────────────────────────────────────────────────────────┐
+  │                  CROSS-CUTTING                                     │
+  │  JWT Middleware → valida Bearer em todas as rotas /api/v1         │
+  │  Swagger UI    → /api/docs                                        │
+  │  Zod           → validação de schemas em todos os endpoints       │
+  └────────────────────────────────────────────────────────────────────┘
 ```
 
-### Estrutura de Pastas (Next.js App Router)
+### Estrutura de Pastas
 
 ```
-Dailymed/
+alarme-de-remedios/
 ├── app/
 │   ├── (auth)/
 │   │   ├── login/page.tsx
 │   │   └── register/page.tsx
 │   ├── (app)/                    ← layout autenticado
-│   │   ├── layout.tsx
-│   │   ├── page.tsx              ← tela inicial: medicações pendentes
+│   │   ├── layout.tsx            ← sidebar, nav mobile, notif bell, group switcher
+│   │   ├── home/page.tsx         ← medicações pendentes do dia
 │   │   ├── dashboard/page.tsx    ← estoque e projeção
 │   │   ├── patients/
 │   │   │   ├── page.tsx
-│   │   │   └── [id]/page.tsx
+│   │   │   └── [id]/
+│   │   │       ├── page.tsx
+│   │   │       └── prescriptions/new/page.tsx
 │   │   ├── medications/
 │   │   │   ├── page.tsx
 │   │   │   └── [id]/page.tsx
 │   │   ├── prescriptions/
 │   │   │   └── [id]/page.tsx
-│   │   └── group/page.tsx
-│   └── api/
-│       ├── docs/route.ts         ← Swagger UI
-│       └── v1/
-│           ├── auth/
-│           │   ├── register/route.ts
-│           │   ├── login/route.ts
-│           │   └── refresh/route.ts
-│           ├── groups/route.ts
-│           ├── groups/[id]/
-│           │   ├── route.ts
-│           │   ├── join/route.ts
-│           │   └── members/route.ts
-│           ├── patients/route.ts
-│           ├── patients/[id]/route.ts
-│           ├── medications/route.ts
-│           ├── medications/[id]/route.ts
-│           ├── prescriptions/route.ts
-│           ├── prescriptions/[id]/route.ts
-│           ├── applications/route.ts
-│           └── dashboard/
-│               ├── pending/route.ts
-│               └── stock/route.ts
+│   │   ├── group/page.tsx
+│   │   ├── log/page.tsx          ← histórico de aplicações
+│   │   └── onboarding/page.tsx
+│   ├── api/
+│   │   ├── docs/page.tsx         ← Swagger UI
+│   │   └── v1/
+│   │       ├── auth/{register,login,refresh,logout}/route.ts
+│   │       ├── groups/route.ts
+│   │       ├── groups/[id]/route.ts
+│   │       ├── groups/[id]/members/route.ts
+│   │       ├── groups/[id]/members/[userId]/route.ts
+│   │       ├── groups/[id]/invite/regenerate/route.ts
+│   │       ├── groups/join/route.ts
+│   │       ├── patients/route.ts
+│   │       ├── patients/[id]/route.ts
+│   │       ├── medications/route.ts
+│   │       ├── medications/[id]/route.ts
+│   │       ├── medications/identify/route.ts  ← IA
+│   │       ├── prescriptions/route.ts
+│   │       ├── prescriptions/[id]/route.ts
+│   │       ├── prescriptions/logs/route.ts    ← audit trail
+│   │       ├── applications/route.ts
+│   │       ├── applications/[id]/route.ts
+│   │       ├── applications/adhoc/route.ts    ← avulso
+│   │       ├── applications/log/route.ts      ← histórico avançado
+│   │       ├── dashboard/pending/route.ts
+│   │       ├── dashboard/stock/route.ts
+│   │       ├── notifications/route.ts
+│   │       ├── notifications/[id]/route.ts
+│   │       └── notifications/push-subscription/route.ts
+│   ├── contexts/
+│   │   └── group-context.tsx     ← estado do grupo ativo (multi-grupo)
+│   ├── components/
+│   │   ├── icons.tsx
+│   │   ├── loading.tsx
+│   │   └── PhotoCropModal.tsx
+│   ├── layout.tsx                ← root layout + ServiceWorkerRegistrar
+│   └── sw-register.tsx           ← registro do SW + ensurePushSubscription()
 ├── lib/
-│   ├── prisma.ts
-│   ├── auth.ts                   ← JWT helpers
-│   ├── middleware.ts             ← auth middleware
-│   └── schedule.ts              ← lógica de sugestão de horários
+│   ├── prisma.ts                 ← singleton Prisma
+│   ├── auth.ts                   ← signAccessToken/signRefreshToken/verify*
+│   ├── api-helpers.ts            ← unauthorized/badRequest/notFound/forbidden
+│   ├── schedule.ts               ← calcSuggestedTimes / parseFraction
+│   └── client/
+│       └── api.ts                ← wrapper fetch com refresh automático
 ├── services/
 │   ├── auth.service.ts
 │   ├── group.service.ts
@@ -323,12 +375,15 @@ Dailymed/
 │   ├── medication.service.ts
 │   ├── prescription.service.ts
 │   ├── application.service.ts
-│   └── dashboard.service.ts
+│   ├── dashboard.service.ts
+│   └── notification.service.ts
 ├── prisma/
 │   └── schema.prisma
 └── public/
     ├── manifest.json             ← PWA manifest
-    └── sw.js                    ← Service Worker
+    ├── sw.js                     ← Service Worker
+    ├── icon-192.png
+    └── icon-512.png
 ```
 
 ---
@@ -347,14 +402,14 @@ Usuário                 Sistema
    │◄── 201 + JWT ─────────│
    │                       │
    │── POST /groups ────────►│  (Criar grupo)
-   │                       │── Gera invite_code único
-   │                       │── Cria group_member (role=admin)
-   │◄── 201 + { invite_code }│
+   │                       │── Gera invite_code único (nanoid, 8 chars)
+   │                       │── Cria GroupMember (role=admin)
+   │◄── 201 + { id, name, invite_code } │
    │                       │
    │  [Outro usuário]      │
    │── POST /groups/join ──►│  body: { invite_code }
    │                       │── Valida código
-   │                       │── Cria group_member (role=member)
+   │                       │── Cria GroupMember (role=member)
    │◄── 200 + group data ──│
 ```
 
@@ -364,23 +419,19 @@ Usuário                 Sistema
 Usuário                     Sistema
    │                            │
    │── POST /prescriptions ─────►│
-   │   {                        │
-   │     patient_id,            │── Valida paciente no grupo do user
-   │     medication_id,         │── Valida medicamento no grupo
-   │     dose_quantity,         │── Processa dose_fraction se informada
-   │     dose_fraction,         │
-   │     frequency_hours,       │── Calcula schedule_times sugeridos:
-   │     duration_days          │   24h / frequency_hours = N aplicações/dia
-   │   }                        │   distribui igualmente a partir de 08:00
-   │                            │
+   │   { patient_id,            │── Valida paciente no grupo do user
+   │     medication_id,         │── Valida medicamento no mesmo grupo
+   │     dose_quantity,         │── Calcula schedule_times se não informado:
+   │     dose_fraction,         │   24h / frequency_hours = N aplicações/dia
+   │     frequency_hours,       │   distribui igualmente a partir de 08:00
+   │     duration_days }        │── end_date = start_date + duration_days
+   │                            │── Cria PrescriptionLog (action=create)
    │◄── 201 + { ...prescription,│
-   │     suggested_times: [     │
-   │       "08:00","16:00",...  │
-   │     ]}                     │
+   │     suggested_times: [...] }│
    │                            │
    │ [Usuário revisa horários]  │
    │── PATCH /prescriptions/:id ►│
-   │   { schedule_times: [...] }│── Salva horários confirmados
+   │   { schedule_times: [...] }│── Salva horários; cria PrescriptionLog (action=update)
    │◄── 200 OK ─────────────────│
 ```
 
@@ -390,25 +441,77 @@ Usuário                     Sistema
 Usuário                         Sistema
    │                                │
    │── POST /applications ──────────►│
-   │   {                            │
-   │     prescription_id,           │── Valida prescrição ativa
+   │   { prescription_id,           │── Valida prescrição ativa
    │     applied_at,                │── Valida membro do grupo
-   │     dose_applied,              │── Registra aplicação
-   │     notes                      │
-   │   }                            │── Se estoque definido:
+   │     dose_applied, notes }      │── Registra Application
+   │                                │── Se estoque definido:
    │                                │   stock_quantity -= dose_applied
-   │                                │   (converte unidades se necessário)
-   │◄── 201 + { application,        │
-   │     stock_remaining }          │── Retorna estoque atualizado
+   │                                │   (gotas → mL: 1 gota = 0,05 mL)
+   │                                │── Se estoque < 7 dias de consumo:
+   │                                │   notifica grupo (LOW_STOCK, dedup 1/dia)
+   │◄── 201 + { application, stockRemaining } │
 ```
 
-### 6.4 Lógica de Sugestão de Horários
+### 6.4 Fluxo de Aplicação Avulsa
+
+```
+Usuário                         Sistema
+   │                                │
+   │── POST /applications/adhoc ────►│
+   │   { patient_id,                │── Valida paciente não arquivado
+   │     medication_id,             │── Valida medicamento no mesmo grupo
+   │     dose_applied, notes }      │── Cria Application (isAdHoc=true)
+   │                                │── Mesmo fluxo de estoque/notificação
+   │◄── 201 + { application, stockRemaining } │
+```
+
+### 6.5 Fluxo de Notificação Push
+
+```
+Sistema                             Browser
+   │                                    │
+   │  [Usuário acessa área autenticada] │
+   │◄── ensurePushSubscription() ───────│
+   │    navigator.serviceWorker.ready   │
+   │    pushManager.subscribe()         │
+   │── POST /notifications/push-subscription │
+   │   { endpoint, p256dh, auth }       │── Upsert PushSubscription no DB
+   │                                    │
+   │  [Evento: dose atrasada, estoque baixo...] │
+   │── sendPushToUsers(userIds, payload)│
+   │   webpush.sendNotification(...)    │── Envia ao endpoint do browser
+   │                                    │── [SW recebe push event]
+   │                                    │── self.registration.showNotification()
+   │                                    │◄── Notificação aparece no OS
+```
+
+### 6.6 Fluxo Offline → Sync
+
+```
+Usuário (offline)               Service Worker              Servidor
+   │                                │                           │
+   │── POST /api/v1/applications ──►│                           │
+   │                                │── fetch() → falha         │
+   │                                │── enqueue() no IndexedDB  │
+   │                                │── notifyClients(QUEUE_CHANGED) │
+   │◄── 202 Accepted ───────────────│                           │
+   │                                │                           │
+   │  [Conectividade restaurada]    │                           │
+   │── online event ────────────────►│                           │
+   │                                │── sync.register("sync-applications") │
+   │                                │── flushQueue()            │
+   │                                │── POST /applications (payload + offline_sync:true) ──►│
+   │                                │                           │── notifyGroupMembers(OFFLINE_APPLICATION)
+   │◄── sw-sync-done event ─────────│                           │
+```
+
+### 6.7 Lógica de Sugestão de Horários
 
 ```
 Entrada: frequency_hours (ex: 8 = a cada 8 horas)
 
 Cálculo:
-  N = 24 / frequency_hours   →  ex: 24/8 = 3 aplicações/dia
+  N = 24 / frequency_hours  →  ex: 24/8 = 3 aplicações/dia
   base_time = 08:00
   interval = 24h / N
 
@@ -416,41 +519,42 @@ Cálculo:
     "08:00",
     "08:00" + interval,      →  "16:00"
     "08:00" + interval * 2,  →  "00:00"
-    ...
   ]
 
-Frequências especiais:
-  frequency_hours = 24  →  ["08:00"]          (uma vez ao dia)
-  frequency_hours = 12  →  ["08:00", "20:00"] (duas vezes ao dia)
-  frequency_hours = 168 →  ["08:00"]          (uma vez por semana — marcado na prescrição)
+Exemplos:
+  frequency_hours = 24  →  ["08:00"]           (1x/dia)
+  frequency_hours = 12  →  ["08:00", "20:00"]  (2x/dia)
+  frequency_hours = 8   →  ["08:00", "16:00", "00:00"]  (3x/dia)
+  frequency_hours < 3   →  rejeitado
 ```
 
-### 6.5 Tela Inicial — Lógica de Ordenação
+### 6.8 Lógica de Medicações Pendentes
 
 ```
-Para cada paciente do grupo:
-  Para cada prescrição ativa:
-    Para cada horário em schedule_times (hoje):
-      Verificar se existe application com scheduled_at = hoje + horario
+Para cada paciente do grupo (não arquivado):
+  Para cada prescrição ativa (dentro do período start_date/end_date):
+    Para cada horário em schedule_times (hoje, no fuso do usuário):
+      Verificar se existe Application:
+        - scheduledAt dentro de ±1 min do horário, OU
+        - appliedAt dentro de ±30 min do horário
 
       Se não existe → PENDENTE
-        Se horario < agora → status = ATRASADA (vermelho)
-        Se horario >= agora → status = PRÓXIMA
+        Se horario < agora - 15min → status = "overdue" (vermelho)
+          → Notificação LATE_APPLICATION (dedup 1/hora por prescrição)
+        Se horario >= agora - 15min → status = "upcoming"
 
 Ordenação:
-  1. ATRASADAS (por tempo de atraso, mais antiga primeiro)
-  2. PRÓXIMAS (por proximidade, mais cedo primeiro)
-
-Atualização: polling a cada 60s ou SSE
+  1. overdue (por tempo de atraso — mais antiga primeiro)
+  2. upcoming (por horário — mais cedo primeiro)
 ```
 
 ---
 
 ## 7. Especificação da API REST
 
-Base URL: `/api/v1`  
-Autenticação: `Authorization: Bearer <jwt>`  
-Documentação interativa: `/api/docs` (Swagger UI)
+Base URL: `/api/v1`
+Autenticação: `Authorization: Bearer <jwt>`
+Documentação interativa: `/api/docs`
 
 ### Endpoints
 
@@ -465,63 +569,79 @@ Documentação interativa: `/api/docs` (Swagger UI)
 
 #### Grupos
 
-| Método | Rota                            | Descrição                 |
-| ------ | ------------------------------- | ------------------------- |
-| GET    | `/groups`                       | Lista grupos do usuário   |
-| POST   | `/groups`                       | Cria novo grupo           |
-| GET    | `/groups/:id`                   | Detalhes do grupo         |
-| PATCH  | `/groups/:id`                   | Atualiza grupo (admin)    |
-| POST   | `/groups/join`                  | Entra em grupo via código |
-| GET    | `/groups/:id/members`           | Lista membros             |
-| DELETE | `/groups/:id/members/:userId`   | Remove membro (admin)     |
-| POST   | `/groups/:id/invite/regenerate` | Regenera código (admin)   |
+| Método | Rota                            | Descrição                       |
+| ------ | ------------------------------- | ------------------------------- |
+| GET    | `/groups`                       | Lista grupos do usuário         |
+| POST   | `/groups`                       | Cria novo grupo                 |
+| GET    | `/groups/:id`                   | Detalhes do grupo + membros     |
+| PATCH  | `/groups/:id`                   | Atualiza nome/foto (admin)      |
+| DELETE | `/groups/:id`                   | Remove grupo (admin)            |
+| POST   | `/groups/join`                  | Entra em grupo via código       |
+| GET    | `/groups/:id/members`           | Lista membros                   |
+| DELETE | `/groups/:id/members/:userId`   | Remove membro (admin)           |
+| POST   | `/groups/:id/invite/regenerate` | Regenera código de convite (admin) |
 
 #### Pacientes
 
 | Método | Rota            | Descrição                |
 | ------ | --------------- | ------------------------ |
-| GET    | `/patients`     | Lista pacientes do grupo |
+| GET    | `/patients`     | Lista pacientes do grupo (`?group_id=`) |
 | POST   | `/patients`     | Cadastra paciente        |
 | GET    | `/patients/:id` | Detalhes do paciente     |
 | PATCH  | `/patients/:id` | Atualiza paciente        |
-| DELETE | `/patients/:id` | Arquiva paciente         |
+| DELETE | `/patients/:id` | Arquiva paciente (`isArchived=true`) |
 
 #### Medicamentos
 
-| Método | Rota               | Descrição                    |
-| ------ | ------------------ | ---------------------------- |
-| GET    | `/medications`     | Lista medicamentos do grupo  |
-| POST   | `/medications`     | Cadastra medicamento         |
-| GET    | `/medications/:id` | Detalhes                     |
-| PATCH  | `/medications/:id` | Atualiza (incluindo estoque) |
-| DELETE | `/medications/:id` | Remove                       |
+| Método | Rota                    | Descrição                              |
+| ------ | ----------------------- | -------------------------------------- |
+| GET    | `/medications`          | Lista medicamentos do grupo (`?group_id=`) |
+| POST   | `/medications`          | Cadastra medicamento                   |
+| GET    | `/medications/:id`      | Detalhes                               |
+| PATCH  | `/medications/:id`      | Atualiza (incluindo estoque)           |
+| DELETE | `/medications/:id`      | Remove                                 |
+| POST   | `/medications/identify` | Identifica medicamento por foto (IA)   |
 
 #### Prescrições
 
-| Método | Rota                 | Descrição                                       |
-| ------ | -------------------- | ----------------------------------------------- |
-| GET    | `/prescriptions`     | Lista prescrições (filtros: patient_id, status) |
-| POST   | `/prescriptions`     | Cria prescrição + retorna horários sugeridos    |
-| GET    | `/prescriptions/:id` | Detalhes                                        |
-| PATCH  | `/prescriptions/:id` | Atualiza (horários, status, etc.)               |
-| DELETE | `/prescriptions/:id` | Remove                                          |
+| Método | Rota                   | Descrição                                                |
+| ------ | ---------------------- | -------------------------------------------------------- |
+| GET    | `/prescriptions`       | Lista prescrições (`?patient_id=`, `?status=`)           |
+| POST   | `/prescriptions`       | Cria prescrição + retorna `suggested_times`              |
+| GET    | `/prescriptions/:id`   | Detalhes                                                 |
+| PATCH  | `/prescriptions/:id`   | Atualiza (horários, status, dose, etc.)                  |
+| DELETE | `/prescriptions/:id`   | Remove + notifica grupo                                  |
+| GET    | `/prescriptions/logs`  | Audit trail paginado (`?patient_id=`, `?limit=`, `?offset=`) |
 
 #### Aplicações
 
-| Método | Rota                | Descrição                                         |
-| ------ | ------------------- | ------------------------------------------------- |
-| GET    | `/applications`     | Lista aplicações (filtros: prescription_id, date) |
-| POST   | `/applications`     | Registra aplicação                                |
-| GET    | `/applications/:id` | Detalhes                                          |
-| PATCH  | `/applications/:id` | Corrige aplicação                                 |
-| DELETE | `/applications/:id` | Remove aplicação                                  |
+| Método | Rota                 | Descrição                                                     |
+| ------ | -------------------- | ------------------------------------------------------------- |
+| GET    | `/applications`      | Lista aplicações (`?prescription_id=`, `?date=`)             |
+| POST   | `/applications`      | Registra aplicação (suporta `offline_sync: true`)            |
+| GET    | `/applications/:id`  | Detalhes                                                      |
+| PATCH  | `/applications/:id`  | Corrige aplicação                                             |
+| DELETE | `/applications/:id`  | Remove aplicação                                              |
+| POST   | `/applications/adhoc`| Registra aplicação avulsa (sem prescrição)                   |
+| GET    | `/applications/log`  | Log avançado com filtros (`?patient_id=`, `?medication_id=`, `?from=`, `?to=`, `?group_id=`, `?limit=`, `?offset=`) |
 
 #### Dashboard
 
-| Método | Rota                 | Descrição                                  |
-| ------ | -------------------- | ------------------------------------------ |
-| GET    | `/dashboard/pending` | Medicações pendentes do dia (tela inicial) |
-| GET    | `/dashboard/stock`   | Projeção de estoque por medicamento        |
+| Método | Rota                 | Descrição                                          |
+| ------ | -------------------- | -------------------------------------------------- |
+| GET    | `/dashboard/pending` | Medicações pendentes do dia (`?tz_offset=`, `?group_id=`) |
+| GET    | `/dashboard/stock`   | Projeção de estoque por medicamento (`?group_id=`) |
+
+#### Notificações
+
+| Método | Rota                              | Descrição                              |
+| ------ | --------------------------------- | -------------------------------------- |
+| GET    | `/notifications`                  | Lista notificações + `unreadCount`     |
+| PATCH  | `/notifications`                  | Marca todas como lidas                 |
+| GET    | `/notifications/:id`              | Detalhe de uma notificação             |
+| PATCH  | `/notifications/:id`              | Marca uma notificação como lida        |
+| POST   | `/notifications/push-subscription`| Salva subscription push do browser    |
+| DELETE | `/notifications/push-subscription`| Remove subscription push               |
 
 ### Exemplos de Payload
 
@@ -533,14 +653,14 @@ Documentação interativa: `/api/docs` (Swagger UI)
   "medication_id": "uuid",
   "dose_quantity": 0.25,
   "dose_fraction": "1/4",
-  "dose_unit": "tablet",
+  "dose_unit": "comprimido",
   "frequency_hours": 12,
   "duration_days": 10,
-  "start_date": "2024-01-15"
+  "start_date": "2025-01-15"
 }
 ```
 
-**Resposta 201**
+**Resposta 201:**
 
 ```json
 {
@@ -551,29 +671,62 @@ Documentação interativa: `/api/docs` (Swagger UI)
   "dose_fraction": "1/4",
   "frequency_hours": 12,
   "duration_days": 10,
-  "start_date": "2024-01-15",
-  "end_date": "2024-01-25",
+  "start_date": "2025-01-15",
+  "end_date": "2025-01-25",
   "status": "active",
   "suggested_times": ["08:00", "20:00"],
-  "schedule_times": null
+  "schedule_times": ["08:00", "20:00"]
 }
 ```
 
-**GET /dashboard/pending**
+**POST /applications/adhoc**
 
 ```json
 {
-  "date": "2024-01-15",
+  "patient_id": "uuid",
+  "medication_id": "uuid",
+  "dose_applied": 2.5,
+  "notes": "Dose extra por orientação veterinária"
+}
+```
+
+**POST /medications/identify**
+
+```json
+{
+  "image_data": "<base64>",
+  "media_type": "image/jpeg"
+}
+```
+
+**Resposta:**
+
+```json
+{
+  "name": "Amoxicilina",
+  "active_ingredient": "Amoxicilina triidratada 500mg",
+  "manufacturer": "Labrador Pharma",
+  "dose_unit": "comprimido",
+  "application_method": "oral",
+  "dose_unit_custom": false
+}
+```
+
+**GET /dashboard/pending?tz_offset=-180**
+
+```json
+{
+  "date": "2025-01-15",
   "items": [
     {
       "patient": { "id": "uuid", "name": "Rex", "species": "dog" },
       "prescription": { "id": "uuid" },
       "medication": { "id": "uuid", "name": "Amoxicilina 500mg" },
-      "scheduled_at": "2024-01-15T08:00:00Z",
+      "scheduled_at": "2025-01-15T11:00:00.000Z",
       "status": "overdue",
       "dose_quantity": 0.25,
       "dose_fraction": "1/4",
-      "dose_unit": "tablet",
+      "dose_unit": "comprimido",
       "applied": false,
       "minutes_overdue": 45
     }
@@ -581,21 +734,47 @@ Documentação interativa: `/api/docs` (Swagger UI)
 }
 ```
 
-**GET /dashboard/stock**
+**GET /applications/log?group_id=uuid&limit=20**
 
 ```json
 {
-  "medications": [
+  "total": 247,
+  "items": [
     {
       "id": "uuid",
-      "name": "Amoxicilina 500mg",
-      "stock_quantity": 8,
-      "stock_unit": "tablet",
-      "daily_consumption": 2,
-      "days_remaining": 4,
-      "alert": true,
-      "estimated_depletion_date": "2024-01-19",
-      "active_prescriptions_count": 2
+      "appliedAt": "2025-01-15T08:05:00.000Z",
+      "scheduledAt": "2025-01-15T08:00:00.000Z",
+      "doseApplied": 0.25,
+      "doseUnit": "comprimido",
+      "notes": null,
+      "isAdHoc": false,
+      "prescriptionId": "uuid",
+      "applier": { "id": "uuid", "name": "Maria" },
+      "patient": { "id": "uuid", "name": "Rex", "species": "dog" },
+      "medication": { "id": "uuid", "name": "Amoxicilina 500mg" }
+    }
+  ]
+}
+```
+
+**GET /prescriptions/logs?patient_id=uuid**
+
+```json
+{
+  "total": 5,
+  "items": [
+    {
+      "id": "cuid",
+      "prescriptionId": "uuid",
+      "patientName": "Rex",
+      "medicationName": "Amoxicilina",
+      "action": "update",
+      "performedAt": "2025-01-14T10:00:00.000Z",
+      "performer": { "id": "uuid", "name": "João" },
+      "changes": {
+        "frequency_hours": [8, 12],
+        "dose_quantity": [0.5, 0.25]
+      }
     }
   ]
 }
@@ -605,13 +784,23 @@ Documentação interativa: `/api/docs` (Swagger UI)
 
 ## 8. Telas e Componentes
 
-### 8.1 Tela Inicial — Medicações Pendentes
+### 8.1 Layout Autenticado (`app/(app)/layout.tsx`)
+
+O layout envolve todas as páginas autenticadas e fornece:
+
+- **Desktop:** sidebar fixa com navegação, group switcher, notification bell, logout
+- **Mobile:** header com logo + group switcher + notification bell; bottom nav com sub-menus expansíveis
+- **OfflineBanner:** exibe banner quando offline ou há itens na fila de sincronização
+- **NotificationBell:** exibe badge com contagem de não lidas, dropdown com lista e ações de leitura
+- **GroupSwitcher:** troca o grupo ativo (compact no header mobile, expandido no sidebar)
+
+### 8.2 Tela Inicial — Medicações Pendentes (`/home`)
 
 ```
 ┌──────────────────────────────────────────────────┐
-│ 🐾 DailyMed          Grupo: Casa da Vó    [Menu] │
+│ DailyMed  |  Grupo: Casa da Vó      [🔔] [Sair] │
 ├──────────────────────────────────────────────────┤
-│ Hoje, 15 Jan · Atualiza em 00:47                │
+│ Hoje, 15 Jan                                     │
 │                                                  │
 │ ┌─────────────────────────────────────────────┐ │
 │ │ 🔴 REX                          ATRASADA    │ │
@@ -635,7 +824,7 @@ Documentação interativa: `/api/docs` (Swagger UI)
 └──────────────────────────────────────────────────┘
 ```
 
-### 8.2 Dashboard de Estoque
+### 8.3 Dashboard de Estoque (`/dashboard`)
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -660,21 +849,37 @@ Documentação interativa: `/api/docs` (Swagger UI)
 └──────────────────────────────────────────────────┘
 ```
 
+### 8.4 Tela de Grupo (`/group`)
+
+- Exibe nome do grupo e foto
+- Mostra código de convite com botão de copiar
+- Botão "Regenerar código" (admin)
+- Lista de membros com papel (admin/member)
+- Botão "Remover membro" (admin, exceto para si)
+- Form de edição do nome/foto do grupo (admin)
+
+### 8.5 Log de Aplicações (`/log`)
+
+- Filtros: paciente, medicamento, período (data de início/fim)
+- Lista paginada de todas as doses registradas
+- Distingue aplicações de prescrição vs. avulsas
+- Exibe quem aplicou, quando, dose e observações
+
 ---
 
 ## 9. Regras de Negócio
 
 ### RN-01: Cálculo de Dosagem Fracionada
 
-- O campo `dose_quantity` armazena o número decimal (ex: `0.25` para 1/4).
-- O campo `dose_fraction` armazena a representação string para exibição (ex: `"1/4"`).
-- A subtração do estoque usa `dose_quantity` em formato decimal.
-- Frações suportadas: 1/4, 1/3, 1/2, 2/3, 3/4, e qualquer valor decimal.
+- `dose_quantity` armazena o decimal (ex: `0.25` para 1/4).
+- `dose_fraction` armazena a representação string para exibição (ex: `"1/4"`).
+- A subtração do estoque usa `dose_quantity` decimal.
+- Frações suportadas: 1/4, 1/3, 1/2, 2/3, 3/4 e qualquer decimal.
 
 ### RN-02: Cálculo de Projeção de Estoque
 
 ```
-consumo_diario = Σ (prescricoes_ativas) de (24 / frequency_hours * dose_quantity)
+consumo_diario = Σ (prescrições ativas) [ (24 / frequency_hours) × dose_quantity ]
 dias_restantes = stock_quantity / consumo_diario
 data_esgotamento = hoje + dias_restantes
 alerta = dias_restantes < 7
@@ -683,157 +888,101 @@ alerta = dias_restantes < 7
 ### RN-03: Horários Sugeridos
 
 - Ponto de partida fixo: 08:00.
-- Intervalo: `24h / (24h / frequency_hours)`.
-- Máximo de 8 aplicações por dia. Se `frequency_hours < 3`, bloquear e pedir confirmação.
-- Os horários são armazenados no formato `HH:MM` em array JSONB.
+- Intervalo: `24h / (24 / frequency_hours)`.
+- Frequências < 3 horas são rejeitadas.
+- Os horários são armazenados em JSONB como array de strings `"HH:MM"`.
 
 ### RN-04: Detecção de Medicação Atrasada
 
-- Uma aplicação é considerada **atrasada** se `scheduled_at < now() - 15 minutos` e não houver registro de aplicação correspondente.
-- Tolerância de 15 minutos antes de marcar como atrasada.
+- Uma aplicação é **atrasada** se `scheduled_at < now() - 15 min` e não houver Application correspondente.
+- Correspondência: `scheduledAt` dentro de ±1 min, ou `appliedAt` dentro de ±30 min.
 
 ### RN-05: Permissões por Grupo
 
-- Apenas membros do grupo podem ver e interagir com os dados daquele grupo.
-- Apenas o admin pode: renomear o grupo, remover membros, regenerar código.
+- Apenas membros do grupo acessam os dados daquele grupo.
+- Apenas o admin pode: renomear/fotoar/excluir o grupo, remover membros, regenerar código.
 - Qualquer membro pode: cadastrar pacientes, medicamentos, prescrições e registrar aplicações.
 
 ### RN-06: Controle de Estoque Negativo
 
-- O sistema **permite** que o estoque fique negativo (para não bloquear aplicações).
-- Quando o estoque atingir zero ou negativo, exibir alerta visual mas não bloquear o registro.
+- O sistema **permite** estoque negativo (não bloqueia aplicações).
+- Quando o estoque ≤ 0 ou há < 7 dias de consumo, dispara notificação `LOW_STOCK` (dedup 1/dia).
+
+### RN-07: Conversão de Unidade para Estoque
+
+- Gotas (`gotas`) são convertidas a mL para subtração de estoque: **1 gota = 0,05 mL**.
+- Demais unidades são subtraídas diretamente.
+
+### RN-08: Deduplicação de Notificações
+
+- Padrão de `dedupKey`: `"low_stock_{medId}_{YYYY-MM-DD}"` (1 alerta/medicamento/dia).
+- `"late_application_{prescriptionId}_{YYYY-MM-DD-HH}"` (1 alerta/prescrição/hora).
+- Janela de dedup: 1 hora (verificada contra `createdAt` da Notification mais recente).
+
+### RN-09: Limpeza de Push Subscriptions
+
+- Ao receber HTTP 410 ("Gone") ao tentar enviar push, o endpoint é removido do banco automaticamente.
+
+### RN-10: Audit Trail de Prescrições
+
+- Toda criação, atualização e exclusão de prescrição gera um registro em `PrescriptionLog`.
+- Em atualizações, o campo `changes` armazena `{ campo: [valorAntes, valorDepois] }` apenas para campos que mudaram.
+- O `prescriptionId` é mantido mesmo após a exclusão (nullable na tabela), para preservar o histórico.
+
+### RN-11: Aplicação Offline
+
+- O Service Worker intercepta `POST /api/v1/applications` quando offline.
+- O payload é enfileirado no IndexedDB com o header `Authorization`.
+- Ao reconectar, a fila é processada com o flag `offline_sync: true`, que dispara notificação `OFFLINE_APPLICATION` para o grupo.
+
+### RN-12: Multi-grupo
+
+- Um usuário pode pertencer a múltiplos grupos e alternar entre eles via `GroupSwitcher`.
+- O grupo ativo é salvo em `localStorage` como `activeGroupId`.
+- Todas as queries de dados (pacientes, medicamentos, prescrições) usam o `activeGroup` como contexto.
 
 ---
 
 ## 10. Estratégia de Deploy
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  DEPLOY — DailyMed                    │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│  Vercel (recomendado para Next.js)                  │
-│  ou Railway (full-stack, mais simples)              │
-│  ─────────────────────────────────────              │
-│  Next.js App              Railway PostgreSQL        │
-│  ├── PWA estático          ├── DB principal         │
-│  ├── API Routes            └── Backups automáticos  │
-│  └── SSR/RSC                                        │
-│                                                     │
-│  Variáveis de Ambiente Necessárias:                 │
-│  DATABASE_URL=postgresql://...                      │
-│  JWT_SECRET=...                                     │
-│  JWT_REFRESH_SECRET=...                             │
-│  NEXT_PUBLIC_APP_URL=https://...                    │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                       DEPLOY — DailyMed                          │
+├──────────────────────────────────────────────────────────────────┤
+│  Vercel (recomendado para Next.js)                               │
+│  ou Railway (full-stack, mais simples)                           │
+│                                                                  │
+│  Next.js App              PostgreSQL (Supabase ou Railway)       │
+│  ├── PWA estático          ├── DB principal (pooler)             │
+│  ├── API Routes            ├── Direct URL (migrations)           │
+│  └── SSR/RSC               └── Backups automáticos              │
+│                                                                  │
+│  Variáveis de Ambiente Necessárias:                              │
+│  DATABASE_URL=postgresql://...       (pooler — queries)          │
+│  DIRECT_URL=postgresql://...         (sem pooler — migrations)   │
+│  JWT_SECRET=...                                                  │
+│  JWT_REFRESH_SECRET=...                                          │
+│  NEXT_PUBLIC_APP_URL=https://...                                 │
+│  NEXT_PUBLIC_VAPID_PUBLIC_KEY=...    (Web Push — client)         │
+│  VAPID_PRIVATE_KEY=...               (Web Push — server)         │
+│  VAPID_SUBJECT=mailto:admin@...      (Web Push — identidade)     │
+│  ANTHROPIC_API_KEY=...               (Claude IA — identificação) │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Geração das chaves VAPID
+
+```bash
+npx web-push generate-vapid-keys
 ```
 
 ### Preparação para App Mobile
 
-A separação entre a camada de API (`/api/v1/*`) e a UI garante que um app mobile pode consumir exatamente os mesmos endpoints. Pontos de atenção para a futura integração mobile:
-
-1. **CORS configurado** para aceitar origens do app mobile.
-2. **Push Notifications**: adicionar tabela `device_tokens` e integrar Firebase Cloud Messaging (FCM) quando o mobile for desenvolvido.
-3. **Offline sync**: o PWA usa Service Worker para cache; o mobile terá sua própria estratégia, mas os endpoints são os mesmos.
-4. **Versionamento de API**: usar `/api/v1/` desde o início para não quebrar o mobile quando a API evoluir.
+1. **CORS** configurado para aceitar origens do app mobile.
+2. **Push Notifications**: o app mobile usará FCM/APNs em vez da Web Push API, mas os endpoints de notificação in-app (`/notifications/*`) são os mesmos.
+3. **Offline sync**: o mobile terá sua própria estratégia, mas os endpoints REST são idênticos.
+4. **Versionamento de API**: `/api/v1/` garante compatibilidade futura.
 
 ---
 
-## 11. Prompt de Implementação
-
-O prompt abaixo pode ser enviado a um modelo de IA (como Claude ou GPT-4) para iniciar a implementação:
-
----
-
-```
-Você é um engenheiro senior full-stack. Implemente o sistema DailyMed conforme a documentação a seguir.
-
-## Stack
-- Next.js 14+ (App Router)
-- TypeScript
-- Prisma ORM + PostgreSQL (Railway)
-- Tailwind CSS
-- JWT (jsonwebtoken) para autenticação
-- bcrypt para hash de senhas
-- zod para validação de schemas
-- zod-to-openapi para geração automática da documentação Swagger
-- PWA: next-pwa ou configuração manual de Service Worker
-
-## Modelo de Dados
-Implemente o seguinte schema Prisma:
-
-- User: id, name, email, passwordHash, createdAt, updatedAt
-- Group: id, name, inviteCode (único, 8 chars), createdBy (FK User), createdAt, updatedAt
-- GroupMember: userId (FK), groupId (FK), role (admin|member), joinedAt
-- Patient: id, groupId (FK), name, species, breed, birthDate, weightKg, photoUrl, notes, isArchived, createdAt, updatedAt
-- Medication: id, groupId (FK), name, manufacturer, activeIngredient, applicationMethod (enum: oral|injectable|topical|ophthalmic|otic|inhalation|other), doseUnit, stockQuantity (nullable, Float), createdAt, updatedAt
-- Prescription: id, patientId (FK), medicationId (FK), doseQuantity (Float), doseFraction (String nullable), doseUnit, frequencyHours (Float), scheduleTimes (Json - array de strings HH:MM), durationDays (Int nullable), startDate, endDate (nullable), status (enum: active|paused|finished), createdBy (FK User), createdAt, updatedAt
-- Application: id, prescriptionId (FK), appliedBy (FK User), appliedAt, scheduledAt, doseApplied (Float), notes, createdAt
-
-## Requisitos de Implementação
-
-### API REST (/api/v1/)
-Implemente os seguintes grupos de endpoints com autenticação JWT via middleware:
-
-1. POST /auth/register, POST /auth/login, POST /auth/refresh
-2. GET/POST /groups, POST /groups/join, GET/DELETE /groups/:id/members
-3. GET/POST /patients, GET/PATCH/DELETE /patients/:id
-4. GET/POST /medications, GET/PATCH/DELETE /medications/:id
-5. GET/POST /prescriptions, GET/PATCH/DELETE /prescriptions/:id
-   - No POST, retornar suggested_times calculados automaticamente
-   - Sugestão: distribuir 24h / frequencyHours aplicações a partir das 08:00
-6. GET/POST /applications, GET/PATCH/DELETE /applications/:id
-   - No POST, subtrair doseApplied do stockQuantity do medicamento
-7. GET /dashboard/pending - medicações pendentes do dia ordenadas
-8. GET /dashboard/stock - projeção de estoque com alertas
-
-### Regras de Negócio
-- Qualquer rota /api/v1 deve exigir Bearer JWT válido
-- Usuários só acessam dados de grupos dos quais são membros
-- Ao registrar aplicação, subtrair do estoque (permitir negativo, apenas alertar)
-- Medicação atrasada: scheduled_at < now() - 15min sem application correspondente
-- Projeção de estoque: stockQuantity / (daily_doses * doseQuantity)
-- Alerta de estoque baixo: dias_restantes < 7
-
-### Frontend (PWA)
-Implemente as seguintes telas com Tailwind CSS:
-
-1. /login e /register — formulários simples
-2. / (home) — lista de medicações pendentes do dia
-   - Cards ordenados por urgência (atrasadas em vermelho, próximas em amarelo)
-   - Botão "Registrar Aplicação" em cada card
-   - Modal de confirmação de aplicação com campo de dose e observação
-   - Auto-atualização a cada 60 segundos
-3. /dashboard — estoque e projeção
-   - Seção de destaque para medicamentos com < 7 dias de estoque
-   - Tabela com todos os medicamentos
-4. /patients — CRUD de pacientes
-5. /medications — CRUD de medicamentos
-6. /patients/:id/prescriptions/new — formulário de prescrição
-   - Seleção de medicamento, dose, frequência
-   - Campo de dose fracionada (dropdown: inteiro, 1/2, 1/3, 1/4, 2/3, 3/4, personalizado)
-   - Exibição dos horários sugeridos pelo sistema com edição inline
-   - Campo de duração em dias (opcional)
-7. /group — gerenciamento do grupo, exibição do código de convite, lista de membros
-
-### PWA
-Configure:
-- manifest.json com nome, ícones, theme_color, display: standalone
-- Service Worker com cache das rotas estáticas e estratégia network-first para API
-
-### Documentação
-- Gere a documentação Swagger automaticamente usando zod-to-openapi
-- Disponibilize em /api/docs com Swagger UI
-
-### Estrutura de Projeto
-Siga a estrutura de pastas documentada, separando claramente:
-- app/ (Next.js routes e pages)
-- services/ (lógica de negócio, sem dependência de HTTP)
-- lib/ (helpers: prisma, auth, schedule)
-
-Comece pelo schema Prisma e pela estrutura base do projeto, depois implemente os endpoints de autenticação e grupos, depois os demais endpoints, e por fim o frontend.
-```
-
----
-
-_Documentação gerada para o projeto DailyMed · Versão 1.0_
+_Documentação atualizada · DailyMed · Versão 2.0_

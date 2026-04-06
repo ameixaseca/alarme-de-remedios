@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getUserFromRequest, unauthorized, badRequest } from "@/lib/api-helpers";
-import { getGroupById, updateGroup } from "@/services/group.service";
+import { getGroupById, updateGroup, deleteGroup } from "@/services/group.service";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -21,6 +21,18 @@ const updateSchema = z.object({
   name: z.string().min(1).optional(),
   photo_url: z.string().optional(),
 });
+
+export async function DELETE(req: NextRequest, { params }: Ctx) {
+  const user = getUserFromRequest(req);
+  if (!user) return unauthorized();
+  try {
+    const { id } = await params;
+    await deleteGroup(id, user.userId);
+    return NextResponse.json({ ok: true });
+  } catch (err: any) {
+    return badRequest(err.message);
+  }
+}
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
   const user = getUserFromRequest(req);
