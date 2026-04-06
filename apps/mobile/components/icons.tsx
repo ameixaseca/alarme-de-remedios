@@ -173,3 +173,11 @@ export function IconCopy({ width = 24, height = 24, color = 'currentColor', stro
     </Svg>
   );
 }
+
+export function IconPackage({ width = 24, height = 24, color = 'currentColor', strokeWidth = 1.75 }: IconProps) {
+  return (
+    <Svg {...base} width={width} height={height}>
+      <Path stroke={color} strokeWidth={strokeWidth} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+    </Svg>
+  );
+}
