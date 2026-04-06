@@ -79,32 +79,90 @@ async function sendPushToUsers(
   });
   if (subscriptions.length === 0) return;
 
-  const vapidPublicKey  = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-  if (!vapidPublicKey || !vapidPrivateKey) return;
+  const webSubs  = subscriptions.filter((s) => s.type === "web"  && s.endpoint && s.p256dh && s.auth);
+  const expoSubs = subscriptions.filter((s) => s.type === "expo" && s.expoToken);
 
-  // Dynamic import avoids issues with edge runtime
-  const webpush = (await import("web-push")).default;
-  webpush.setVapidDetails(VAPID_SUBJECT, vapidPublicKey, vapidPrivateKey);
+  // Send Web Push notifications
+  if (webSubs.length > 0) {
+    const vapidPublicKey  = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
 
-  const pushPayload = JSON.stringify({ title: payload.title, body: payload.body });
+    if (vapidPublicKey && vapidPrivateKey) {
+      // Dynamic import avoids issues with edge runtime
+      const webpush = (await import("web-push")).default;
+      webpush.setVapidDetails(VAPID_SUBJECT, vapidPublicKey, vapidPrivateKey);
 
-  await Promise.allSettled(
-    subscriptions.map(async (sub) => {
-      try {
-        await webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          pushPayload
-        );
-      } catch (err: any) {
-        if (err?.statusCode === 410) {
+      const pushPayload = JSON.stringify({ title: payload.title, body: payload.body });
+
+      await Promise.allSettled(
+        webSubs.map(async (sub) => {
+          try {
+            await webpush.sendNotification(
+              { endpoint: sub.endpoint!, keys: { p256dh: sub.p256dh!, auth: sub.auth! } },
+              pushPayload
+            );
+          } catch (err: any) {
+            if (err?.statusCode === 410) {
+              await prisma.pushSubscription
+                .delete({ where: { endpoint: sub.endpoint! } })
+                .catch(() => {});
+            }
+          }
+        })
+      );
+    }
+  }
+
+  // Send Expo Push notifications
+  if (expoSubs.length > 0) {
+    await sendExpoPushNotifications(expoSubs.map((s) => s.expoToken!), payload);
+  }
+}
+
+async function sendExpoPushNotifications(
+  tokens: string[],
+  payload: { title: string; body: string }
+) {
+  const messages = tokens.map((token) => ({
+    to: token,
+    sound: "default" as const,
+    title: payload.title,
+    body: payload.body,
+  }));
+
+  try {
+    const res = await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "Accept-Encoding": "gzip, deflate",
+      },
+      body: JSON.stringify(messages),
+    });
+
+    if (!res.ok) return;
+
+    const data = await res.json();
+    const results: Array<{ status: string; details?: { error?: string } }> = data?.data ?? [];
+
+    // Remove invalid/unregistered tokens
+    await Promise.allSettled(
+      results.map(async (result, i) => {
+        if (
+          result.status === "error" &&
+          (result.details?.error === "DeviceNotRegistered" ||
+            result.details?.error === "InvalidCredentials")
+        ) {
           await prisma.pushSubscription
-            .delete({ where: { endpoint: sub.endpoint } })
+            .deleteMany({ where: { expoToken: tokens[i] } })
             .catch(() => {});
         }
-      }
-    })
-  );
+      })
+    );
+  } catch {
+    // Ignore Expo push errors — non-blocking
+  }
 }
 
 // ── Read / list ───────────────────────────────────────────
@@ -147,11 +205,26 @@ export async function savePushSubscription(
 ) {
   await prisma.pushSubscription.upsert({
     where:  { endpoint: sub.endpoint },
-    create: { userId, endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
+    create: { userId, endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth, type: "web" },
     update: { userId, p256dh: sub.p256dh, auth: sub.auth },
   });
 }
 
-export async function removePushSubscription(endpoint: string) {
-  await prisma.pushSubscription.deleteMany({ where: { endpoint } });
+export async function saveExpoPushToken(userId: string, token: string) {
+  const existing = await prisma.pushSubscription.findFirst({
+    where: { userId, expoToken: token },
+  });
+  if (!existing) {
+    await prisma.pushSubscription.create({
+      data: { userId, type: "expo", expoToken: token },
+    });
+  }
+}
+
+export async function removePushSubscription(endpoint?: string, expoToken?: string) {
+  if (expoToken) {
+    await prisma.pushSubscription.deleteMany({ where: { expoToken } });
+  } else if (endpoint) {
+    await prisma.pushSubscription.deleteMany({ where: { endpoint } });
+  }
 }

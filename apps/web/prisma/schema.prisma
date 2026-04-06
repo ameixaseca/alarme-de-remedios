@@ -173,9 +173,11 @@ model Notification {
 model PushSubscription {
   id        String   @id @default(cuid())
   userId    String
-  endpoint  String   @unique
-  p256dh    String
-  auth      String
+  endpoint  String?  @unique
+  p256dh    String?
+  auth      String?
+  type      String   @default("web")
+  expoToken String?
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

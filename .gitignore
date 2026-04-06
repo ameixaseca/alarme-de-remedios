@@ -38,3 +38,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Monorepo
+node_modules/
+.turbo/
+apps/web/node_modules/
+apps/mobile/node_modules/
+packages/*/node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+apps/mobile/.expo/
