@@ -1,6 +1,5 @@
 {
   "framework": "nextjs",
-  "installCommand": "cd ../.. && pnpm install",
-  "buildCommand": "cd ../.. && pnpm --filter=@dailymed/web build",
+  "buildCommand": "pnpm build",
   "outputDirectory": ".next"
 }
