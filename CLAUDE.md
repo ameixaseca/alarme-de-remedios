@@ -282,4 +282,41 @@ Ao encontrar código legado que viola estes princípios: **não piore**. Se o es
 
 ---
 
+## 14. Desenvolvimento Mobile (React Native / Expo)
+
+Este projeto tem um app mobile em `mobile/` usando Expo + Expo Router. As regras abaixo são **complementares** às demais seções deste documento.
+
+### Paridade com a Web
+
+- O app mobile é o **mesmo produto** em plataforma nativa — não uma versão simplificada.
+- Toda funcionalidade da web deve estar no mobile. Se a web tem uma tela ou fluxo, o mobile também tem.
+- A identidade visual é a mesma: paleta indigo/gray, mesmos ícones (SVG paths de `icons.tsx`), mesma hierarquia de cards e tipografia. Os design tokens vivem em `mobile/theme.ts`.
+
+### Separação de Responsabilidades
+
+- **Nunca** importar `services/` ou `lib/prisma.ts` no código mobile — esses módulos são server-side.
+- O mobile **sempre** consome a API REST via `packages/shared/api-client`.
+- Tipos e interfaces compartilhados vivem em `packages/shared/types` — nunca duplicar.
+
+### Segurança Mobile
+
+- Tokens JWT devem ser armazenados em `expo-secure-store`, nunca em `AsyncStorage` (não criptografado).
+- O mesmo princípio de não expor detalhes internos aplica-se às mensagens de erro exibidas ao usuário.
+
+### Estrutura de Código Mobile
+
+- Siga o Expo Router file-based routing (espelha o Next.js App Router do web).
+- Use NativeWind v4 para estilização — as classes Tailwind são as mesmas do web.
+- Hooks de dados ficam em `mobile/hooks/` e seguem o mesmo contrato dos hooks do web (mesmos nomes, mesmas responsabilidades).
+- Componentes reutilizáveis ficam em `mobile/components/` e são nomeados igual aos do web (`Card`, `Button`, `Badge`, `GroupSwitcher`, `NotificationBell`).
+
+### Deploy Mobile
+
+- Builds são feitos via **EAS Build** (cloud) — não requerem Xcode/Android Studio local para CI.
+- Updates de JS (sem mudança nativa) são distribuídos via **EAS Update** (OTA) sem passar pelas stores.
+- Mudanças que alteram código nativo (adicionar SDK nativo, modificar `app.json` com novos plugins) **exigem** novo build EAS antes de chegar aos usuários.
+- Consulte `.github/mobile-implementation-plan.md` para o plano completo de fases.
+
+---
+
 _Este documento é vivo. Atualize-o conforme o projeto evolui e novos padrões emergem._

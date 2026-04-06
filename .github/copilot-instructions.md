@@ -3,7 +3,7 @@
 # DailyMed — Documentação de Requisitos e Design Técnico
 
 > Sistema de controle de aplicação de medicação para pets
-> Stack: Next.js · PostgreSQL (Railway/Supabase) · REST API · PWA · Web Push · IA (Claude)
+> Stack: Next.js · PostgreSQL (Railway/Supabase) · REST API · PWA · Web Push · IA (Claude) · React Native (Expo)
 
 ---
 
@@ -19,6 +19,7 @@
 8. [Telas e Componentes](#8-telas-e-componentes)
 9. [Regras de Negócio](#9-regras-de-negócio)
 10. [Estratégia de Deploy](#10-estratégia-de-deploy)
+11. [App Mobile React Native](#11-app-mobile-react-native)
 
 ---
 
@@ -132,10 +133,12 @@
 - RNF-04: O banco de dados deve ser PostgreSQL (Railway ou Supabase).
 - RNF-05: Senhas devem ser armazenadas com hash bcrypt (12 rounds).
 - RNF-06: A aplicação deve funcionar bem em telas mobile (375px+) e desktop.
-- RNF-07: O código deve ser estruturado de forma a facilitar a extração da camada de API para consumo por um app React Native ou Flutter futuramente.
+- RNF-07: O código deve ser estruturado de forma a facilitar o consumo da API REST pelo app React Native (monorepo com pacotes compartilhados de tipos e cliente HTTP).
 - RNF-08: A aplicação deve funcionar offline para registro de aplicações, com sincronização automática.
-- RNF-09: Notificações push devem ser enviadas via Web Push API (biblioteca `web-push` + chaves VAPID).
+- RNF-09: Notificações push devem ser enviadas via Web Push API (biblioteca `web-push` + chaves VAPID) na web, e via Expo Notifications (APNs/FCM) no mobile.
 - RNF-10: Identificação de medicamentos por foto deve usar IA (Claude Haiku via Anthropic API).
+- RNF-11: O app mobile deve ter **paridade funcional** com a interface web — todas as funcionalidades disponíveis na web devem estar disponíveis no mobile.
+- RNF-12: O app mobile deve ter **paridade visual** com a interface web — mesma paleta de cores (indigo/gray), mesma estrutura de cards, mesmos ícones (Lucide), mesma tipografia e hierarquia visual.
 
 ---
 
@@ -245,8 +248,8 @@ PrescriptionAction: create | update | delete
   │                          CLIENT LAYER                              │
   │                                                                    │
   │  ┌──────────────────────────────────┐  ┌────────────────────────┐ │
-  │  │         PWA (Next.js)            │  │  Mobile App (futuro)   │ │
-  │  │  React 19 + Tailwind CSS 4       │  │  React Native/Flutter  │ │
+  │  │         PWA (Next.js)            │  │  Mobile App (Expo RN)  │ │
+  │  │  React 19 + Tailwind CSS 4       │  │  Expo Router + EAS     │ │
   │  │  Service Worker (sw.js)          │  │                        │ │
   │  │  ├─ App Shell cache              │  │                        │ │
   │  │  ├─ Network-first para API       │  │                        │ │
@@ -301,11 +304,42 @@ PrescriptionAction: create | update | delete
   └────────────────────────────────────────────────────────────────────┘
 ```
 
-### Estrutura de Pastas
+### Estrutura de Pastas (Monorepo)
+
+O projeto usa **pnpm workspaces + Turborepo**. O web fica em `apps/web/`, o mobile em `apps/mobile/`. A raiz é apenas orquestração — sem deps de aplicação. Ver `.github/mobile-implementation-plan.md` para detalhes da migração.
 
 ```
-alarme-de-remedios/
-├── app/
+alarme-de-remedios/              ← workspace root (apenas turbo + pnpm config)
+├── package.json                 ← scripts turbo, sem deps de app
+├── pnpm-workspace.yaml          ← packages: ["apps/*", "packages/*"]
+├── turbo.json                   ← pipelines: build, dev, lint
+├── packages/
+│   └── shared/
+│       ├── types/               ← interfaces TypeScript compartilhadas (Patient, Medication, etc.)
+│       └── api-client/          ← wrapper fetch com refresh automático (reutilizado web + mobile)
+├── apps/
+│   ├── mobile/                  ← app React Native (Expo)
+│   │   ├── app/                 ← Expo Router (file-based, espelha rotas do web)
+│   │   │   ├── (auth)/
+│   │   │   │   ├── login.tsx
+│   │   │   │   └── register.tsx
+│   │   │   └── (app)/
+│   │   │       ├── _layout.tsx  ← bottom tabs (Início · Medicamentos · Pacientes · Grupo · Log)
+│   │   │       ├── index.tsx    ← /home — medicações pendentes
+│   │   │       ├── dashboard.tsx
+│   │   │       ├── patients/
+│   │   │       ├── medications/
+│   │   │       ├── prescriptions/
+│   │   │       ├── group.tsx
+│   │   │       └── log.tsx
+│   │   ├── components/          ← Card, Button, Badge, GroupSwitcher, NotificationBell
+│   │   ├── hooks/               ← useAuth, useGroup, usePendingMedications, etc.
+│   │   ├── theme.ts             ← tokens de design (cores espelham Tailwind do web)
+│   │   ├── app.json             ← configuração Expo
+│   │   ├── eas.json             ← perfis de build (development, preview, production)
+│   │   └── package.json
+│   └── web/                     ← Next.js (migrado da raiz na Fase 0)
+│       ├── app/
 │   ├── (auth)/
 │   │   ├── login/page.tsx
 │   │   └── register/page.tsx
@@ -976,13 +1010,136 @@ alerta = dias_restantes < 7
 npx web-push generate-vapid-keys
 ```
 
-### Preparação para App Mobile
+### Deploy Web (existente)
 
-1. **CORS** configurado para aceitar origens do app mobile.
-2. **Push Notifications**: o app mobile usará FCM/APNs em vez da Web Push API, mas os endpoints de notificação in-app (`/notifications/*`) são os mesmos.
-3. **Offline sync**: o mobile terá sua própria estratégia, mas os endpoints REST são idênticos.
+```
+Vercel (recomendado para Next.js) ou Railway (full-stack)
+Next.js App  →  PostgreSQL (Supabase ou Railway)
+```
+
+### Deploy Mobile — EAS (Expo Application Services)
+
+```
+Código → GitHub → EAS Build (cloud) → TestFlight / Google Play Internal → Production
+                                   ↓ OTA update (JS bundle via expo-updates)
+                            Devices já instalados recebem update automático
+```
+
+**Perfis de build (`eas.json`):**
+
+| Perfil        | Uso                           | Distribuição        |
+| ------------- | ----------------------------- | ------------------- |
+| `development` | Dev build com Expo Dev Client | internal            |
+| `preview`     | APK/IPA para testes internos  | internal            |
+| `production`  | Build de loja                 | store (iOS/Android) |
+
+**Configurações de ambiente mobile:**
+
+```
+EXPO_PUBLIC_API_URL=https://...       ← URL da API Next.js em produção
+EXPO_PUBLIC_VAPID_PUBLIC_KEY=...      ← não usado; mobile usa Expo Push Token
+```
+
+**Notificações mobile:**
+- O mobile usa `expo-notifications` com Expo Push Token (APNs/FCM gerenciados pelo Expo).
+- O servidor envia para `https://exp.host/--/api/v2/push/send` em vez de VAPID.
+- O endpoint `/notifications/push-subscription` aceita ambos os formatos (Web Push subscription e Expo Push Token).
+
+### Preparação do backend para App Mobile
+
+1. **CORS** configurado para aceitar origens do app mobile (header `Origin: null` para RN).
+2. **Push Notifications**: endpoint `/notifications/push-subscription` estendido para aceitar `{ type: "expo", token: "ExponentPushToken[...]" }`.
+3. **Offline sync**: mobile enfileira via AsyncStorage e sincroniza ao reconectar; endpoints REST são idênticos.
 4. **Versionamento de API**: `/api/v1/` garante compatibilidade futura.
 
 ---
 
-_Documentação atualizada · DailyMed · Versão 2.0_
+## 11. App Mobile React Native
+
+### Princípio de Paridade
+
+> O app mobile é a versão nativa da mesma aplicação web. A experiência do usuário deve ser idêntica em funcionalidade e visualmente reconhecível como o mesmo produto.
+
+- Toda funcionalidade disponível na web deve estar disponível no mobile.
+- A paleta de cores, hierarquia visual e vocabulário de UI são os mesmos.
+- Os SVG icons do web (`icons.tsx`) são replicados com `react-native-svg` usando os mesmos paths.
+- Não criar fluxos alternativos nem simplificar funcionalidades — apenas adaptar os primitivos (View/Text em vez de div/span).
+
+### Stack Mobile
+
+| Decisão              | Tecnologia                                 | Justificativa                                              |
+| -------------------- | ------------------------------------------ | ---------------------------------------------------------- |
+| Framework            | **Expo SDK** (managed workflow)            | Build na nuvem, OTA updates, sem Xcode/Android Studio local |
+| Roteamento           | **Expo Router v3** (file-based)            | Mesmo paradigma do Next.js App Router — consistência      |
+| Estilização          | **NativeWind v4** (Tailwind → StyleSheet)  | Reutiliza classes Tailwind do web; paridade visual         |
+| Ícones               | **react-native-svg** com paths do web      | Exatos mesmos ícones do web sem dependência adicional      |
+| HTTP Client          | `packages/shared/api-client`               | Mesmo cliente com refresh automático, compartilhado       |
+| Tipos                | `packages/shared/types`                    | Sem duplicação de interfaces                               |
+| Auth storage         | **expo-secure-store**                      | JWT armazenado com segurança (não AsyncStorage)            |
+| Notificações         | **expo-notifications**                     | APNs/FCM gerenciados pelo Expo                             |
+| Câmera/Foto          | **expo-image-picker**                      | Identificação de medicamento por foto (IA)                 |
+| Deploy               | **EAS Build + EAS Submit**                 | CI/CD nativo, builds na nuvem                              |
+
+### Design Tokens (`mobile/theme.ts`)
+
+Os tokens espelham diretamente as cores do Tailwind usadas no web:
+
+```typescript
+export const colors = {
+  background: "#f9fafb",   // bg-gray-50
+  foreground: "#111827",   // text-gray-900
+  primary: "#4f46e5",      // indigo-600
+  primaryLight: "#eef2ff", // indigo-50
+  primaryText: "#4338ca",  // indigo-700
+  danger: "#dc2626",       // red-600
+  dangerLight: "#fef2f2",  // red-50
+  warning: "#d97706",      // amber-600
+  warningLight: "#fffbeb", // amber-50
+  success: "#16a34a",      // green-600
+  successLight: "#f0fdf4", // green-50
+  border: "#e5e7eb",       // gray-200
+  muted: "#6b7280",        // gray-500
+  surface: "#ffffff",      // white
+};
+```
+
+### Navegação Mobile
+
+A estrutura de tabs espelha o `mobileNavItems` do web:
+
+```
+Bottom Tabs:
+  ├── Início     (IconHome)       → /home — medicações pendentes
+  ├── Remédios   (IconPill)       → stack: medications + dashboard + log
+  ├── Pacientes  (IconUsers)      → stack: patients + prescriptions
+  └── Grupo      (IconGroup)      → stack: group + onboarding
+
+Header fixo (todas as telas autenticadas):
+  ├── Logo + nome do app
+  ├── GroupSwitcher (ActionSheet nativo)
+  └── NotificationBell (badge + modal de notificações)
+```
+
+### Regras de Implementação Mobile
+
+1. **Nunca importar** `services/` diretamente no mobile — sempre via API REST usando `packages/shared/api-client`.
+2. **Nunca usar** `AsyncStorage` para dados sensíveis — use `expo-secure-store` para tokens JWT.
+3. **Sempre usar** `KeyboardAvoidingView` em formulários com inputs.
+4. **Sempre usar** `SafeAreaView` (ou `useSafeAreaInsets`) nos layouts de tela.
+5. **Offline**: usar `@react-native-async-storage/async-storage` para fila de aplicações offline, mesma lógica do Service Worker do web.
+6. **Imagens**: usar `expo-image` em vez de `Image` nativo para cache e performance.
+7. **Pull-to-refresh**: implementar `RefreshControl` na tela `/home` (equivalente ao polling de 60s do web).
+
+### Checklist Mobile antes de PR
+
+- [ ] A funcionalidade existe e funciona na web?
+- [ ] A tela usa os mesmos design tokens (`theme.ts`)?
+- [ ] Os ícones são os mesmos SVG paths do `icons.tsx` web?
+- [ ] Formulários têm `KeyboardAvoidingView` e `SafeAreaView`?
+- [ ] Tokens JWT estão em `expo-secure-store`, não `AsyncStorage`?
+- [ ] Testado em iOS e Android (simulador)?
+- [ ] OTA update compatível (sem native changes desnecessárias)?
+
+---
+
+_Documentação atualizada · DailyMed · Versão 3.0_
