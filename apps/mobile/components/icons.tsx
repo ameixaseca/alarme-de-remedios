@@ -146,6 +146,15 @@ export function IconLogOut({ width = 24, height = 24, color = 'currentColor', st
   );
 }
 
+export function IconPerson({ width = 24, height = 24, color = 'currentColor', strokeWidth = 1.75 }: IconProps) {
+  return (
+    <Svg {...base} width={width} height={height}>
+      <Path stroke={color} strokeWidth={strokeWidth} d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+      <Circle stroke={color} strokeWidth={strokeWidth} cx="12" cy="7" r="4" />
+    </Svg>
+  );
+}
+
 export function IconRefresh({ width = 24, height = 24, color = 'currentColor', strokeWidth = 1.75 }: IconProps) {
   return (
     <Svg {...base} width={width} height={height}>
