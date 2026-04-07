@@ -10,8 +10,11 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
+import * as Haptics from 'expo-haptics';
 import { PendingMedication } from '@dailymed/shared/types';
 import { apiRequest } from '@dailymed/shared/api-client';
+import { useOfflineQueue } from '../hooks/useOfflineQueue';
 import { IconX, IconCheck } from './icons';
 
 interface ApplicationModalProps {
@@ -28,23 +31,36 @@ function formatDose(med: PendingMedication): string {
 export function ApplicationModal({ item, onClose, onSuccess }: ApplicationModalProps) {
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+  const { enqueue } = useOfflineQueue();
 
   async function handleConfirm() {
     if (!item) return;
     setLoading(true);
+    const payload = {
+      prescriptionId: item.prescriptionId,
+      patientId: item.patientId,
+      medicationId: item.medicationId,
+      scheduledAt: item.scheduledAt,
+      appliedAt: new Date().toISOString(),
+      doseApplied: item.doseQuantity,
+      notes: notes.trim() || undefined,
+    };
     try {
+      const netState = await NetInfo.fetch();
+      if (!netState.isConnected) {
+        await enqueue(payload);
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert('Salvo offline', 'A aplicação será sincronizada quando a conexão for restaurada.');
+        setNotes('');
+        onSuccess();
+        onClose();
+        return;
+      }
       await apiRequest('/api/v1/applications', {
         method: 'POST',
-        body: JSON.stringify({
-          prescriptionId: item.prescriptionId,
-          patientId: item.patientId,
-          medicationId: item.medicationId,
-          scheduledAt: item.scheduledAt,
-          appliedAt: new Date().toISOString(),
-          doseApplied: item.doseQuantity,
-          notes: notes.trim() || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setNotes('');
       onSuccess();
       onClose();
