@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import { View } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
+import { useOfflineQueue } from '../../hooks/useOfflineQueue';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { GroupSwitcher } from '../../components/GroupSwitcher';
 import { NotificationBell } from '../../components/NotificationBell';
@@ -10,9 +11,10 @@ import { OfflineBanner } from '../../components/OfflineBanner';
 import { IconHome, IconPill, IconUsers, IconGroup, IconClipboard, IconPackage } from '../../components/icons';
 
 function AppHeader() {
+  const { queueCount } = useOfflineQueue();
   return (
     <View className="bg-white border-b border-gray-200">
-      <OfflineBanner />
+      <OfflineBanner queueCount={queueCount} />
       <View className="flex-row items-center justify-between px-4 py-2 pt-12">
         <GroupSwitcher />
         <NotificationBell />
