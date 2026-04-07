@@ -6,7 +6,7 @@ import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { GroupSwitcher } from '../../components/GroupSwitcher';
 import { NotificationBell } from '../../components/NotificationBell';
 import { OfflineBanner } from '../../components/OfflineBanner';
-import { IconHome, IconPill, IconUsers, IconGroup } from '../../components/icons';
+import { IconHome, IconPill, IconUsers, IconGroup, IconPackage } from '../../components/icons';
 
 function AppHeader() {
   return (
@@ -51,6 +51,13 @@ export default function AppLayout() {
         options={{
           title: 'Remédios',
           tabBarIcon: ({ color, size }) => <IconPill width={size} height={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="dashboard"
+        options={{
+          title: 'Estoque',
+          tabBarIcon: ({ color, size }) => <IconPackage width={size} height={size} color={color} />,
         }}
       />
       <Tabs.Screen
