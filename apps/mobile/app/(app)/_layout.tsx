@@ -2,11 +2,12 @@ import { Redirect } from 'expo-router';
 import { Tabs } from 'expo-router';
 import { View } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
+import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { GroupSwitcher } from '../../components/GroupSwitcher';
 import { NotificationBell } from '../../components/NotificationBell';
 import { OfflineBanner } from '../../components/OfflineBanner';
-import { IconHome, IconPill, IconUsers, IconGroup } from '../../components/icons';
+import { IconHome, IconPill, IconUsers, IconGroup, IconClipboard, IconPackage } from '../../components/icons';
 
 function AppHeader() {
   return (
@@ -22,6 +23,7 @@ function AppHeader() {
 
 export default function AppLayout() {
   const { isAuthenticated, isLoading } = useAuth();
+  usePushNotifications();
 
   if (isLoading) return <LoadingSpinner fullScreen />;
   if (!isAuthenticated) return <Redirect href="/(auth)/login" />;
@@ -54,10 +56,24 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
+        name="dashboard"
+        options={{
+          title: 'Estoque',
+          tabBarIcon: ({ color, size }) => <IconPackage width={size} height={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="patients"
         options={{
           title: 'Pacientes',
           tabBarIcon: ({ color, size }) => <IconUsers width={size} height={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="log"
+        options={{
+          title: 'Log',
+          tabBarIcon: ({ color, size }) => <IconClipboard width={size} height={size} color={color} />,
         }}
       />
       <Tabs.Screen
