@@ -4,7 +4,7 @@
   "packageManager": "pnpm@10.14.0",
   "engines": {
     "node": ">=20.0.0",
-    "pnpm": ">  =10.0.0"
+    "pnpm": ">=10.0.0"
   },
   "scripts": {
     "dev": "turbo dev",
@@ -33,6 +33,4 @@
       "metro-runtime": "0.81.5"
     }
   }
-}
-}
 }
