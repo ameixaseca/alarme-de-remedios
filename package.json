@@ -1,6 +1,7 @@
 {
   "name": "dailymed",
   "private": true,
+  "packageManager": "pnpm@10.6.5",
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
